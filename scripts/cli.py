@@ -234,6 +234,49 @@ def cmd_list(args):
         print(f"  {m.id} | imp:{m.importance}/10 | {preview}{links_info}{owner_info}")
 
 
+def cmd_quick_add(args):
+    """直接保存记忆，无需 API 调用"""
+    store = get_store(args)
+
+    from memory_store import Memory
+    from datetime import datetime
+
+    keywords = [k.strip() for k in args.keywords.split(',')]
+    tags = [t.strip() for t in args.tags.split(',')]
+
+    memory = Memory(
+        id=store.generate_id(),
+        content=args.content,
+        timestamp=datetime.now().isoformat(),
+        keywords=keywords,
+        tags=tags,
+        context=args.context or '',
+        importance=args.importance,
+        owner=getattr(args, 'agent', '') or '',
+        scope='personal',
+    )
+
+    store.add(memory)
+
+    # 自动关联
+    from associator import link_memory
+    agent_type = None
+    if hasattr(args, 'agent') and args.agent:
+        from registry import AgentRegistry
+        reg = AgentRegistry()
+        agent_type = reg.get_agent_type(args.agent)
+
+    updated = link_memory(memory, store, agent_type=agent_type)
+    associations = updated.related_ids
+
+    print(f'已保存: [{memory.id}] {memory.content[:50]}')
+    print(f'关键词: {keywords}')
+    print(f'标签: {tags}')
+    print(f'重要度: {args.importance}')
+    if associations:
+        print(f'关联: {associations}')
+
+
 def cmd_export(args):
     """Export memories to Obsidian notes + graph."""
     from obsidian_export import export_all
@@ -312,6 +355,14 @@ def main():
         help=f"输出目录（默认: {DEFAULT_EXPORT_DIR}）",
     )
 
+    # ---- quick-add ----
+    parser_quick_add = subparsers.add_parser("quick-add", help="直接保存记忆（无需 API）")
+    parser_quick_add.add_argument("content", help="记忆内容")
+    parser_quick_add.add_argument("--keywords", required=True, help="关键词（逗号分隔）")
+    parser_quick_add.add_argument("--tags", default="task", help="标签（逗号分隔，默认 task）")
+    parser_quick_add.add_argument("--importance", type=int, default=5, help="重要度 1-10（默认 5）")
+    parser_quick_add.add_argument("--context", default="", help="上下文说明")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -321,6 +372,7 @@ def main():
     commands = {
         "retrieve": cmd_retrieve,
         "add": cmd_add,
+        "quick-add": cmd_quick_add,
         "stats": cmd_stats,
         "evolve": cmd_evolve,
         "list": cmd_list,
