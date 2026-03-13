@@ -92,6 +92,15 @@ root 按影响程度分级决策：低影响直接做，中影响做后汇报，
 └── auto-memory/               # Claude Code 原生 auto-memory
 ```
 
+### 每个 Agent 目录包含
+
+| 文件 | 说明 |
+|------|------|
+| `WhoAmI.md` | 身份定义：职责范围、工具权限、越权拒绝规则、强制收尾流程 |
+| `role.md` | 技能分配与标准工作流（由母体定义） |
+| `feedback_*.md` | 行为反馈记录（good/bad/prohibited），用于持续改进 |
+| `{agent}_{date}_{seq}.md` | 任务记忆文件，每条独立存储（如 `tetsu_20260313_001.md`） |
+
 ### 记忆格式
 
 每条记忆是一个独立 `.md` 文件，包含 YAML frontmatter + 正文：
