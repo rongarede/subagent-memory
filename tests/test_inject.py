@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 import tempfile
 import json
 
@@ -10,8 +11,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 from memory_store import Memory, MemoryStore
 
 
-def _create_test_store(tmp_path):
-    store = MemoryStore(tmp_path)
+def _create_test_store(tmp_dir):
+    store = MemoryStore(tmp_dir)
     store.add(Memory(
         id="mem_20260310_001",
         content="修复 LaTeX fontspec 编译错误",
@@ -38,56 +39,51 @@ def _create_test_store(tmp_path):
 class TestBuildInjectionContext:
     def test_returns_string(self):
         from inject import build_injection_context
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             result = build_injection_context("LaTeX 编译", store)
             assert isinstance(result, str)
             assert len(result) > 0
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
     def test_contains_memory_content(self):
         from inject import build_injection_context
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             result = build_injection_context("LaTeX 编译", store)
             assert "fontspec" in result or "LaTeX" in result
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
     def test_empty_store_returns_empty(self):
         from inject import build_injection_context
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = MemoryStore(tmp)
             result = build_injection_context("anything", store)
             assert result == ""
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
     def test_respects_max_tokens(self):
         from inject import build_injection_context
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             short = build_injection_context("LaTeX", store, max_chars=100)
             full = build_injection_context("LaTeX", store, max_chars=10000)
             assert len(short) <= len(full)
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
 
 class TestEnrichAgentPrompt:
     def test_adds_memory_section(self):
         from inject import enrich_agent_prompt
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             original = "请修复 LaTeX 编译错误"
@@ -95,26 +91,24 @@ class TestEnrichAgentPrompt:
             assert "联想记忆" in enriched
             assert original in enriched
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
     def test_no_memories_returns_original(self):
         from inject import enrich_agent_prompt
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = MemoryStore(tmp)
             original = "请修复 LaTeX 编译错误"
             result = enrich_agent_prompt(original, store)
             assert result == original
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
 
 class TestMarkMemoryUsed:
     def test_updates_access_count(self):
         from inject import mark_memories_used
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             mark_memories_used(["mem_20260310_001"], store)
@@ -122,56 +116,52 @@ class TestMarkMemoryUsed:
             assert mem.access_count == 1
             assert mem.last_accessed is not None
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
 
 class TestEvolveMemory:
     def test_update_context(self):
         from inject import evolve_memory
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             evolve_memory("mem_20260310_001", store, context="更新后的语境描述")
             mem = store.get("mem_20260310_001")
             assert mem.context == "更新后的语境描述"
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
     def test_update_tags(self):
         from inject import evolve_memory
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             evolve_memory("mem_20260310_001", store, tags=["updated", "new-tag"])
             mem = store.get("mem_20260310_001")
             assert "updated" in mem.tags
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
     def test_add_keywords(self):
         from inject import evolve_memory
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             evolve_memory("mem_20260310_001", store, add_keywords=["新关键词"])
             mem = store.get("mem_20260310_001")
             assert "新关键词" in mem.keywords
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
     def test_nonexistent_memory_returns_none(self):
         from inject import evolve_memory
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp = f.name
+        tmp = tempfile.mkdtemp()
         try:
             store = _create_test_store(tmp)
             result = evolve_memory("nonexistent", store, context="test")
             assert result is None
         finally:
-            os.unlink(tmp)
+            shutil.rmtree(tmp)
 
 
 def run_tests():

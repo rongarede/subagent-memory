@@ -19,7 +19,7 @@ from memory_store import Memory, MemoryStore
 
 OBSIDIAN_VAULT = Path(os.path.expanduser("~/Obsidian"))
 MEMORY_DIR = OBSIDIAN_VAULT / "300_Resources" / "Agent_Memory"
-DEFAULT_STORE = os.path.expanduser("~/.claude/memory/memories.jsonl")
+DEFAULT_STORE = os.path.expanduser("~/.claude/memory/memories")
 
 
 def export_memory_note(memory: Memory, output_dir: Path) -> Path:
@@ -246,7 +246,7 @@ def export_all(store_path: str = None, output_dir: str = None, agent_name: str =
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Export memories to Obsidian")
-    parser.add_argument("--store", default=DEFAULT_STORE, help="Path to memories.jsonl")
+    parser.add_argument("--store", default=DEFAULT_STORE, help="Path to memory store directory")
     parser.add_argument("--output", default=str(MEMORY_DIR), help="Output directory")
     parser.add_argument("--agent", default=None, help="角色名，只导出该角色的记忆")
     args = parser.parse_args()

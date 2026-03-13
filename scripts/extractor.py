@@ -168,7 +168,7 @@ def create_memory_from_task(
     if scope == "shared":
         from pathlib import Path
         import os as _os
-        shared_path = Path(_os.path.expanduser("~/.claude/memory/shared/memories.jsonl"))
+        shared_path = Path(_os.path.expanduser("~/.claude/memory/shared"))
         shared_path.parent.mkdir(parents=True, exist_ok=True)
         shared_store = MemoryStore(store_path=str(shared_path))
         # 生成 shared ID：使用 shared_ 前缀 + 今日日期，序号自动递增

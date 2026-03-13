@@ -23,7 +23,7 @@ from memory_store import Memory, MemoryStore
 from retriever import retrieve, format_for_prompt
 
 
-DEFAULT_STORE = os.path.expanduser("~/.claude/memory/memories.jsonl")
+DEFAULT_STORE = os.path.expanduser("~/.claude/memory/memories")
 DEFAULT_EXPORT_DIR = str(Path(os.path.expanduser("~/Obsidian/300_Resources/Agent_Memory")))
 
 
@@ -122,7 +122,7 @@ def cmd_stats(args):
 
     # 当指定 --agent 时，同时展示 shared 记忆统计
     if getattr(args, 'agent', None):
-        shared_path = Path(os.path.expanduser("~/.claude/memory/shared/memories.jsonl"))
+        shared_path = Path(os.path.expanduser("~/.claude/memory/shared"))
         if shared_path.exists():
             shared_store = MemoryStore(store_path=str(shared_path))
             shared_memories = shared_store.load_all()
@@ -245,9 +245,12 @@ def cmd_quick_add(args):
     tags = [t.strip() for t in args.tags.split(',')]
 
     memory = Memory(
-        id=store.generate_id(),
+        id=store.generate_id(name=args.name, memory_type=args.type),
         content=args.content,
         timestamp=datetime.now().isoformat(),
+        name=args.name or '',
+        description=args.description or '',
+        type=args.type,
         keywords=keywords,
         tags=tags,
         context=args.context or '',
@@ -276,6 +279,46 @@ def cmd_quick_add(args):
     if associations:
         print(f'关联: {associations}')
 
+    # 自动刷新索引
+    _generate_index(store)
+
+
+def _generate_index(store: MemoryStore) -> Path:
+    """Generate MEMORY.md index grouped by memory type."""
+    memories = store.load_all()
+
+    type_order = ["user", "feedback", "task", "knowledge", "project", "reference"]
+    grouped: dict[str, list[Memory]] = {t: [] for t in type_order}
+    for mem in memories:
+        mt = (mem.type or "task").strip().lower() or "task"
+        if mt not in grouped:
+            grouped[mt] = []
+        grouped[mt].append(mem)
+
+    lines: list[str] = ["# Memory Index", ""]
+    for mt in type_order:
+        items = grouped.get(mt, [])
+        if not items:
+            continue
+        lines.append(f"## {mt.capitalize()}")
+        for mem in sorted(items, key=lambda m: m.id):
+            title = (mem.name or "").strip() or mem.id
+            desc = (mem.description or "").strip() or (mem.context or "").strip() or mem.content.strip()
+            desc = desc.replace("\n", " ")
+            lines.append(f"- [{title}]({mem.id}.md) — {desc}")
+        lines.append("")
+
+    output = store.store_path / "MEMORY.md"
+    output.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return output
+
+
+def cmd_generate_index(args):
+    """Generate MEMORY.md index in store directory."""
+    store = get_store(args)
+    output = _generate_index(store)
+    print(f"索引已生成: {output}")
+
 
 def cmd_export(args):
     """Export memories to Obsidian notes + graph."""
@@ -303,7 +346,7 @@ def main():
     parser.add_argument(
         "--store",
         default=DEFAULT_STORE,
-        help=f"记忆库路径（默认: {DEFAULT_STORE}）",
+        help=f"记忆库目录路径（默认: {DEFAULT_STORE}）",
     )
     parser.add_argument(
         "--agent",
@@ -362,6 +405,18 @@ def main():
     parser_quick_add.add_argument("--tags", default="task", help="标签（逗号分隔，默认 task）")
     parser_quick_add.add_argument("--importance", type=int, default=5, help="重要度 1-10（默认 5）")
     parser_quick_add.add_argument("--context", default="", help="上下文说明")
+    parser_quick_add.add_argument("--name", default="", help="人类可读短名")
+    parser_quick_add.add_argument("--description", default="", help="一句话摘要")
+    parser_quick_add.add_argument(
+        "--type",
+        dest="type",
+        choices=["user", "feedback", "task", "knowledge", "project", "reference"],
+        default="task",
+        help="记忆类型（默认 task）",
+    )
+
+    # ---- generate-index ----
+    subparsers.add_parser("generate-index", help="按类型生成 MEMORY.md 索引")
 
     args = parser.parse_args()
 
@@ -373,6 +428,7 @@ def main():
         "retrieve": cmd_retrieve,
         "add": cmd_add,
         "quick-add": cmd_quick_add,
+        "generate-index": cmd_generate_index,
         "stats": cmd_stats,
         "evolve": cmd_evolve,
         "list": cmd_list,

@@ -147,6 +147,10 @@ format_for_prompt() → 注入 subagent context
 }
 ```
 
+## 已知问题
+
+- `obsidian_export.py` 的 vault 路径硬编码为 `~/Obsidian`，实际 vault 在 iCloud 路径。`cli.py export` 命令暂不可用。
+
 ## 依赖
 
 ```bash

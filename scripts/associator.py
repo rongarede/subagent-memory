@@ -38,7 +38,7 @@ def find_associations(
         base = Path(os.path.expanduser("~/.claude/memory"))
         all_memories = []
         for agent in same_type_agents:
-            agent_path = base / "agents" / agent / "memories.jsonl"
+            agent_path = base / "agents" / agent
             if agent_path.exists():
                 agent_store = MemoryStore(store_path=str(agent_path))
                 all_memories.extend(agent_store.load_all())
@@ -96,7 +96,7 @@ def link_memory(
         for assoc_id in associated_ids:
             # 在同类型各角色的存储中查找该记忆
             for agent in same_type_agents:
-                agent_path = base / "agents" / agent / "memories.jsonl"
+                agent_path = base / "agents" / agent
                 if agent_path.exists():
                     agent_store = MemoryStore(store_path=str(agent_path))
                     existing = agent_store.get(assoc_id)

@@ -22,7 +22,14 @@ NAME_POOLS = {
     "Auditor": ["Shin", "Onyx", "Argon", "Quartz", "Flint"],
     "Analyst": ["Yomi", "Lyric", "Astra", "Cipher", "Nexus"],
     "Inspector": ["Haku", "Rune", "Velox", "Ignis", "Terra"],
+    "Raiga": ["Raiga"],       # 吞噬者（单例）：拆分书籍/文档、创建 skill
+    "Fumio": ["Fumio"],       # 图书管理员（单例）：管理本地书籍文档
+    "Norna": ["Norna"],       # 母体（单例）：创建 subagent 角色
+    "Yume": ["Yume"],         # 梦者（单例）：管理所有角色的记忆
 }
+
+# 单例角色类型：每类只有一个唯一个体，不可重复创建
+SINGLETON_TYPES = {"Raiga", "Fumio", "Norna", "Yume"}
 
 # subagent_type 映射（用户使用的 type → 内部 type）
 TYPE_ALIASES = {
@@ -32,6 +39,18 @@ TYPE_ALIASES = {
     "code-reviewer": "Auditor",
     "worker-researcher": "Analyst",
     "worker-reviewer": "Inspector",
+    "devourer": "Raiga",
+    "吞噬者": "Raiga",
+    "raiga": "Raiga",
+    "librarian": "Fumio",
+    "图书管理员": "Fumio",
+    "fumio": "Fumio",
+    "matrix": "Norna",
+    "母体": "Norna",
+    "norna": "Norna",
+    "yume": "Yume",
+    "梦者": "Yume",
+    "dreamer": "Yume",
 }
 
 
@@ -77,9 +96,20 @@ class AgentRegistry:
         """
         从指定类型的名字池中分配一个角色。
         优先分配已存在但 idle 的角色，其次创建新角色。
+        单例类型（Raiga/Fumio/Norna）若已存在则直接返回，不创建新的。
         返回角色名（小写）。
         """
-        resolved_type = self._resolve_type(agent_type)
+        # 标准化类型名
+        resolved_type = TYPE_ALIASES.get(agent_type, agent_type)
+
+        # 单例检查：如果类型是 singleton，检查是否已存在
+        if resolved_type in SINGLETON_TYPES:
+            singleton_registry = self._read_json(self.registry_path)
+            for name, info in singleton_registry.get('agents', {}).items():
+                if info.get('type') == resolved_type:
+                    # 已存在，直接返回该角色名（不创建新的）
+                    return name
+
         registry = self._read_json(self.registry_path)
         agents = registry.get("agents", {})
 
@@ -155,11 +185,6 @@ class AgentRegistry:
         agent_dir = self.base / "agents" / name
         agent_dir.mkdir(parents=True, exist_ok=True)
 
-        # 创建空的 memories.jsonl
-        memories_path = agent_dir / "memories.jsonl"
-        if not memories_path.exists():
-            memories_path.touch()
-
         # 创建 profile.json
         profile = {
             "name": name,
@@ -169,6 +194,11 @@ class AgentRegistry:
             "last_active": datetime.now().isoformat(),
         }
         self._write_json(agent_dir / "profile.json", profile)
+
+        # 创建空的 memories.jsonl（兼容旧格式检测）
+        memories_path = agent_dir / "memories.jsonl"
+        if not memories_path.exists():
+            memories_path.touch()
 
     def _update_profile(self, name: str, agent_type: str):
         """更新角色的 profile（task_count + last_active）"""

@@ -249,7 +249,7 @@ def evolve_neighbors(
         same_type_agents = registry.get_agents_by_type(agent_type)
         base = Path(os.path.expanduser("~/.claude/memory"))
         for agent in same_type_agents:
-            agent_path = base / "agents" / agent / "memories.jsonl"
+            agent_path = base / "agents" / agent
             if agent_path.exists():
                 agent_store = MemoryStore(store_path=str(agent_path))
                 for nid in neighbor_ids:
@@ -292,7 +292,7 @@ def evolve_neighbors(
             same_type_agents = registry.get_agents_by_type(agent_type)
             base = Path(os.path.expanduser("~/.claude/memory"))
             for agent in same_type_agents:
-                agent_path = base / "agents" / agent / "memories.jsonl"
+                agent_path = base / "agents" / agent
                 if agent_path.exists():
                     agent_store = MemoryStore(store_path=str(agent_path))
                     cross_updated = execute_evolution(remaining, agent_store, new_memory.id)

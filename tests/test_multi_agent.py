@@ -302,10 +302,9 @@ class TestDualLayerMemory:
             all_memories.extend(store_shared.load_all())
 
             import tempfile as _tmp
-            tmp = _tmp.NamedTemporaryFile(suffix='.jsonl', delete=False)
-            tmp.close()
+            tmp_merged_dir = _tmp.mkdtemp(prefix="test-retrieve-merged-")
             try:
-                merged_store = MemoryStore(store_path=tmp.name)
+                merged_store = MemoryStore(store_path=tmp_merged_dir)
                 for m in all_memories:
                     merged_store.add(m)
                 results = _retrieve(
@@ -316,7 +315,7 @@ class TestDualLayerMemory:
                     now=datetime(2026, 3, 13, 10, 0, 0),
                 )
             finally:
-                os.unlink(tmp.name)
+                _cleanup_dir(tmp_merged_dir)
 
             # 合并检索应找到至少 2 条记忆（kaze 的 + mirin 的 或 shared 的）
             assert len(results) >= 2, \
@@ -370,10 +369,9 @@ class TestDualLayerMemory:
             explore_merged = explore_memories + shared_memories
 
             import tempfile as _tmp
-            tmp = _tmp.NamedTemporaryFile(suffix='.jsonl', delete=False)
-            tmp.close()
+            tmp_merged_dir2 = _tmp.mkdtemp(prefix="test-cross-type-")
             try:
-                merged_store = MemoryStore(store_path=tmp.name)
+                merged_store = MemoryStore(store_path=tmp_merged_dir2)
                 for m in explore_merged:
                     merged_store.add(m)
                 results = _retrieve(
@@ -384,7 +382,7 @@ class TestDualLayerMemory:
                     now=datetime(2026, 3, 13, 10, 0, 0),
                 )
             finally:
-                os.unlink(tmp.name)
+                _cleanup_dir(tmp_merged_dir2)
 
             result_ids = [m.id for m, _ in results]
             assert m_worker.id not in result_ids, \
@@ -735,10 +733,12 @@ class TestAutoClassification:
                 f"晋升后原始记忆 scope 应变为 shared，实际 {original_after.scope}"
 
             # shared 层应有该记忆的副本（路径已被重定向到 base_dir）
-            shared_path = Path(base_dir) / "shared" / "memories.jsonl"
-            assert shared_path.exists(), \
-                f"shared/memories.jsonl 应在晋升后存在: {shared_path}"
-            shared_store_check = MemoryStore(store_path=str(shared_path))
+            # 新 .md 存储：检查 shared 目录下有 .md 文件
+            shared_dir = Path(base_dir) / "shared"
+            md_files = list(shared_dir.glob("*.md"))
+            assert len(md_files) > 0, \
+                f"shared 目录下应有 .md 记忆文件，实际: {list(shared_dir.iterdir()) if shared_dir.exists() else '目录不存在'}"
+            shared_store_check = MemoryStore(store_path=str(shared_dir))
             shared_mems = shared_store_check.load_all()
             assert len(shared_mems) >= 1, \
                 f"shared 层应有 >=1 条记忆，实际 {len(shared_mems)}"

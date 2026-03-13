@@ -2,6 +2,8 @@
 
 import os
 import sys
+import shutil
+import tempfile
 import json
 from unittest.mock import patch, MagicMock
 from datetime import datetime
@@ -130,7 +132,6 @@ class TestCreateMemoryFromTask:
 
     def test_creates_valid_memory(self):
         from extractor import create_memory_from_task
-        import tempfile
         from memory_store import MemoryStore
 
         task_info = {
@@ -147,11 +148,10 @@ class TestCreateMemoryFromTask:
             "importance": 8
         }))]
 
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
 
         try:
-            store = MemoryStore(tmp_path)
+            store = MemoryStore(tmp_dir)
 
             with patch('extractor.get_client') as mock_client:
                 mock_client.return_value.messages.create.return_value = mock_response
@@ -168,18 +168,16 @@ class TestCreateMemoryFromTask:
             assert len(loaded) == 1
             assert loaded[0].id == memory.id
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
     def test_auto_links_with_existing_memories(self):
         from extractor import create_memory_from_task
-        import tempfile
         from memory_store import MemoryStore, Memory
 
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
 
         try:
-            store = MemoryStore(tmp_path)
+            store = MemoryStore(tmp_dir)
 
             # Add existing memory
             existing = Memory(
@@ -216,7 +214,7 @@ class TestCreateMemoryFromTask:
             # (may or may not depending on BM25 threshold, so just check it runs)
             assert isinstance(memory, Memory)
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
 
 class TestPromptTemplate:

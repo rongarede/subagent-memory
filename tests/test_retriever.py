@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 import tempfile
 import json
 from datetime import datetime, timedelta
@@ -159,10 +160,9 @@ class TestImportance:
 
 class TestRetriever:
     def test_retrieve_latex_query(self):
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
         try:
-            store = create_test_store(tmp_path)
+            store = create_test_store(tmp_dir)
             now = datetime(2026, 3, 12, 10, 0, 0)
             results = retrieve("LaTeX 编译错误怎么修", store, top_k=3, spread=False, now=now)
 
@@ -172,13 +172,12 @@ class TestRetriever:
             assert "fontspec" in top_mem.content or "LaTeX" in top_mem.content
             assert top_score > 0
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
     def test_retrieve_memory_query(self):
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
         try:
-            store = create_test_store(tmp_path)
+            store = create_test_store(tmp_dir)
             now = datetime(2026, 3, 12, 10, 0, 0)
             results = retrieve("联想记忆系统", store, top_k=3, spread=False, now=now)
 
@@ -187,13 +186,12 @@ class TestRetriever:
             top_ids = [m.id for m, _ in results]
             assert "mem_20260311_002" in top_ids or "mem_20260311_003" in top_ids
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
     def test_spread_activation(self):
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
         try:
-            store = create_test_store(tmp_path)
+            store = create_test_store(tmp_dir)
             now = datetime(2026, 3, 12, 10, 0, 0)
 
             # Without spread
@@ -204,25 +202,23 @@ class TestRetriever:
             # Spread should return more results (linked memories)
             assert len(results_spread) >= len(results_no_spread)
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
     def test_empty_store(self):
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
         try:
-            store = MemoryStore(tmp_path)
+            store = MemoryStore(tmp_dir)
             results = retrieve("anything", store, top_k=3)
             assert results == []
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
 
 class TestAssociator:
     def test_find_associations(self):
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
         try:
-            store = create_test_store(tmp_path)
+            store = create_test_store(tmp_dir)
             new_mem = Memory(
                 id="mem_20260312_001",
                 content="修复 LaTeX biber 引用编译错误",
@@ -237,13 +233,12 @@ class TestAssociator:
             # Should find LaTeX-related memories
             assert len(associated) > 0
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
     def test_link_bidirectional(self):
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            tmp_path = f.name
+        tmp_dir = tempfile.mkdtemp()
         try:
-            store = create_test_store(tmp_path)
+            store = create_test_store(tmp_dir)
             new_mem = Memory(
                 id="mem_20260312_001",
                 content="修复 LaTeX biber 引用编译错误",
@@ -265,7 +260,7 @@ class TestAssociator:
                 if related:
                     assert new_mem.id in related.related_ids
         finally:
-            os.unlink(tmp_path)
+            shutil.rmtree(tmp_dir)
 
 
 class TestFormatForPrompt:

@@ -215,17 +215,16 @@ def format_for_prompt(results: list[tuple[Memory, float]], max_items: int = 5) -
 
 if __name__ == "__main__":
     import tempfile
+    import shutil
     sys.path.insert(0, os.path.dirname(__file__))
 
     print("=" * 60)
     print("联想记忆系统 — CLI Demo")
     print("=" * 60)
 
-    # 创建临时存储并填充示例数据
-    with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-        tmp_path = f.name
-
-    store = MemoryStore(tmp_path)
+    # 创建临时存储目录并填充示例数据
+    tmp_path = tempfile.mkdtemp(prefix="agent_memory_")
+    store = MemoryStore(store_path=tmp_path)
 
     samples = [
         Memory(
@@ -310,5 +309,5 @@ if __name__ == "__main__":
         results = retrieve(query, store, top_k=3, spread=True, now=now)
         print(format_for_prompt(results))
 
-    # 清理临时文件
-    os.unlink(tmp_path)
+    # 清理临时目录
+    shutil.rmtree(tmp_path, ignore_errors=True)

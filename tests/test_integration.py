@@ -48,10 +48,9 @@ def _make_mock_response(keywords, tags, context, importance):
 
 
 def _new_tmp_store():
-    """创建隔离的临时 JSONL 文件，返回 (path, store)。"""
-    tmp = tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False)
-    tmp.close()
-    return tmp.name, MemoryStore(tmp.name)
+    """创建隔离的临时目录，返回 (path, store)。"""
+    tmp_dir = tempfile.mkdtemp()
+    return tmp_dir, MemoryStore(tmp_dir)
 
 
 def _new_tmp_dir():
@@ -151,7 +150,7 @@ class TestFullMemoryLifecycle:
             assert memory.content in note_content, "note 正文中应包含 memory.content"
 
         finally:
-            os.unlink(store_path)
+            _cleanup_dir(store_path)
             _cleanup_dir(out_dir)
 
 
@@ -259,7 +258,7 @@ class TestMultiMemoryAssociationAndSpread:
                     "检索结果应按分数降序排列"
 
         finally:
-            os.unlink(store_path)
+            _cleanup_dir(store_path)
 
 
 # ==================== 场景 3 ====================
@@ -358,7 +357,7 @@ class TestPassiveEvolutionAndAccessTracking:
                 f"新增关键词检索应命中 {memory.id}，实际结果 {result_ids}"
 
         finally:
-            os.unlink(store_path)
+            _cleanup_dir(store_path)
 
 
 # ==================== 场景 4 ====================
@@ -465,7 +464,7 @@ class TestCliFullCommandSet:
                 f"export 应生成 ≥3 个 .md 文件（note + MOC + graph），实际 {len(exported_files)}"
 
         finally:
-            os.unlink(store_path)
+            _cleanup_dir(store_path)
             _cleanup_dir(out_dir)
 
 
@@ -575,7 +574,7 @@ class TestChineseContentFullChain:
             assert memory.id in moc_content, "MOC 中应包含 memory ID"
 
         finally:
-            os.unlink(store_path)
+            _cleanup_dir(store_path)
             _cleanup_dir(out_dir)
 
 
