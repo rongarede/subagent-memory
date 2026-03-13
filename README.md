@@ -18,9 +18,9 @@
 | **kaze（风者）** | Explore | 代码探索、文件搜索、结构理解 | 只读 |
 | **mirin（観者）** | Explore | 代码探索（第二探索者） | 只读 |
 | **shin（審者）** | Auditor | 只读审计、质量评分、测试验证 | 只读 |
-| **tetsu（鉄者）** | Worker | 文件修改、bug 修复、配置更新 | 读写 |
+| **tetsu（鉄者）** | 蚁工 | 文件修改、bug 修复、配置更新 | 读写 |
 | **sora（空者）** | Operator | 运维操作、环境设置 | 读写 |
-| **yomi（読者）** | Analyst | 数据分析、模式识别、研究 | 只读为主 |
+| **yomi（読者）** | 斥候 | 外部信息勘探、学术检索、技术趋势分析、竞品调研 | 只读为主 + WebSearch/WebFetch |
 | **haku（白者）** | Inspector | 代码审查（质量/安全/可维护性） | 只读 + lint/test |
 
 ### Singleton 角色（中文命名，b1 亲创）
@@ -78,9 +78,9 @@ root 按影响程度分级决策：低影响直接做，中影响做后汇报，
 │   │   ├── kaze/              # 记忆文件 + WhoAmI.md + feedback
 │   │   └── mirin/
 │   ├── Auditor/shin/
-│   ├── Worker/tetsu/
+│   ├── 蚁工/tetsu/
 │   ├── Operator/sora/
-│   ├── Analyst/yomi/
+│   ├── 斥候/yomi/
 │   ├── Inspector/haku/
 │   ├── 吞食者/raiga/
 │   ├── 图书管理员/fumio/
@@ -172,13 +172,13 @@ python3 scripts/cli.py retrieve \
   --query "审计" --top-k 5
 
 # 列出记忆
-python3 scripts/cli.py list --store ~/mem/mem/agents/Worker/tetsu
+python3 scripts/cli.py list --store ~/mem/mem/agents/蚁工/tetsu
 
 # 生成索引
 python3 scripts/cli.py generate-index --store ~/mem/mem/agents/Auditor/shin
 
 # 统计
-python3 scripts/cli.py stats --store ~/mem/mem/agents/Worker/tetsu
+python3 scripts/cli.py stats --store ~/mem/mem/agents/蚁工/tetsu
 ```
 
 ### 测试
