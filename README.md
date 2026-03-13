@@ -21,14 +21,14 @@
 | **tetsu（鉄者）** | 蚁工 | 文件修改、bug 修复、配置更新 | 读写 |
 | **sora（空者）** | Operator | 运维操作、环境设置 | 读写 |
 | **yomi（読者）** | 斥候 | 外部信息勘探、学术检索、技术趋势分析、竞品调研 | 只读为主 + WebSearch/WebFetch |
-| **haku（白者）** | Inspector | 代码审查（质量/安全/可维护性） | 只读 + lint/test |
+| **haku（白者）** | 药师 | 代码审查（质量/安全/可维护性） | 只读 + lint/test |
 
 ### Singleton 角色（中文命名，b1 亲创）
 
 | 角色 | 代号 | 职责 | 独占权限 |
 |------|------|------|----------|
 | **吞食者** | raiga | 吞食书籍/文档 → 产出 skill 和 CLAUDE.md 约束 | 内容消化与知识提炼 |
-| **图书管理员** | fumio | 管理所有书籍、项目文件、文档 | 知识库组织 |
+| **织者** | fumio | 管理所有书籍、项目文件、文档 | 知识库组织 |
 | **母体** | norna | 创造与销毁 subagent | agent 生命周期管理 |
 | **梦者** | yume | 管理所有 agent 的记忆（~/mem/mem/） | 记忆系统唯一管理者 |
 
@@ -58,8 +58,18 @@ b1 直接创建的 11 个 agent 永不消亡。
 ### 3. Feedback 反馈
 每个 agent 目录下有 `feedback_*.md` 文件，记录好/坏行为，用于持续改进。
 
-### 4. 强制记忆保存
-每个 subagent 任务完成前，必须通过 `quick-add` CLI 保存一条任务记忆。不保存 = 任务未完成。
+### 4. 记忆保存（root 调度）
+记忆保存由 **root（主会话）** 统一负责，非 subagent 自行义务。每个 Agent tool 返回后，root 立即派轻量 agent 调用 `quick-add` 保存该次任务记忆。不保存 = agent 工作未完成。
+
+Memory Flush 自动触发事件（不依赖用户提醒）：
+
+| 触发事件 | 保存内容 | 保存到 |
+|----------|---------|--------|
+| Agent 完成任务 | 任务摘要 + 关键发现 | 对应 agent 的 store |
+| 重要架构决策 | 决策理由 + 备选方案 | `~/mem/mem/root/` |
+| 用户反馈/纠正 | 反馈内容 + 行为修正 | `~/mem/mem/root/` |
+| 话题切换 | 前一话题的工作摘要 | 对应 agent 的 store |
+| 会话即将结束 | 全会话工作总结 | `~/mem/mem/root/` |
 
 ### 5. 独立验证
 shin 审计 → tetsu 修复 → shin 重验。不信任 subagent 自报结果。
@@ -81,9 +91,9 @@ root 按影响程度分级决策：低影响直接做，中影响做后汇报，
 │   ├── 蚁工/tetsu/
 │   ├── Operator/sora/
 │   ├── 斥候/yomi/
-│   ├── Inspector/haku/
+│   ├── 药师/haku/
 │   ├── 吞食者/raiga/
-│   ├── 图书管理员/fumio/
+│   ├── 织者/fumio/
 │   ├── 母体/norna/
 │   ├── 梦者/yume/
 │   └── README.md
@@ -157,19 +167,22 @@ scope: personal
 ### CLI 使用
 
 ```bash
-# 添加记忆
-python3 scripts/cli.py quick-add \
+# 添加记忆（--agent 和 --store 必须在子命令 quick-add 之前，--keywords 必填）
+python3 scripts/cli.py \
   --agent shin \
+  --store ~/mem/mem/agents/Auditor/shin \
+  quick-add \
   --name "审计结果" \
   --description "CLAUDE.md 审计通过" \
   --type task \
-  --store ~/mem/mem/agents/Auditor/shin \
+  --keywords "审计,CLAUDE.md,验证" \
   "审计内容详情..."
 
 # 检索记忆
-python3 scripts/cli.py retrieve \
+python3 scripts/cli.py \
+  --agent shin \
   --store ~/mem/mem/agents/Auditor/shin \
-  --query "审计" --top-k 5
+  retrieve "审计" --top-k 5
 
 # 列出记忆
 python3 scripts/cli.py list --store ~/mem/mem/agents/蚁工/tetsu
@@ -180,6 +193,24 @@ python3 scripts/cli.py generate-index --store ~/mem/mem/agents/Auditor/shin
 # 统计
 python3 scripts/cli.py stats --store ~/mem/mem/agents/蚁工/tetsu
 ```
+
+### 路径约束（CRITICAL）
+
+`--store` 必须使用**磁盘上的实际目录名**（中文类型名），不得使用英文类型名：
+
+| Agent | 正确路径 | 错误路径 |
+|-------|---------|---------|
+| tetsu | `~/mem/mem/agents/蚁工/tetsu` | `~/mem/mem/agents/Worker/tetsu` |
+| yomi | `~/mem/mem/agents/斥候/yomi` | `~/mem/mem/agents/Analyst/yomi` |
+| haku | `~/mem/mem/agents/药师/haku` | `~/mem/mem/agents/Inspector/haku` |
+| fumio | `~/mem/mem/agents/织者/fumio` | `~/mem/mem/agents/图书管理员/fumio` |
+| kaze/mirin | `~/mem/mem/agents/Explore/{name}` | — |
+| shin | `~/mem/mem/agents/Auditor/shin` | — |
+| sora | `~/mem/mem/agents/Operator/sora` | — |
+| raiga | `~/mem/mem/agents/吞食者/raiga` | — |
+| norna | `~/mem/mem/agents/母体/norna` | — |
+| yume | `~/mem/mem/agents/梦者/yume` | — |
+| root | `~/mem/mem/root` | `~/.claude/memory/root/` |
 
 ### 测试
 
@@ -194,12 +225,14 @@ python -m pytest tests/ -v    # 93 tests, all passing
 b1 提出需求
   → root 分析、创建 Task、分配角色
     → kaze 探索代码（注入 WhoAmI）
+    → [root 立即保存 kaze 记忆]
     → tetsu 执行修改（注入 WhoAmI）
+    → [root 立即保存 tetsu 记忆]
     → shin 审计验证（注入 WhoAmI）
-    → 每个 agent 完成后保存任务记忆
+    → [root 立即保存 shin 记忆]
   → root 验证结果（独立检查，不信任自报）
   → root 更新项目主页迭代日志
-  → root 保存 root 记忆
+  → root 保存 root 决策记忆
 ```
 
 ## License
