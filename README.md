@@ -1,87 +1,197 @@
-# Subagent Memory
+# Subagent Memory System
 
-联想记忆系统：为 Claude Code subagent 提供基于 BM25 + 三维评分的任务记忆检索、创建和关联管理。
+基于 BM25 + 三维评分的 Claude Code subagent 联想记忆系统。为每个 agent 提供独立的任务记忆存储、检索和关联管理。
 
-## 特性
+## 角色体系
 
-- **BM25 + 三维评分检索**：relevance（BM25 min-max normalized）+ recency（0.995^hours）+ importance（val/10）
-- **扩散激活**：1-hop 遍历 related_ids，自动拉入关联记忆
-- **双层记忆**：个人记忆（per-agent）+ 共享记忆（common knowledge），支持被动晋升
-- **角色注册系统**：6 类角色（Explore/Worker/Auditor/Operator/Analyst/Inspector），每类预定义名字池
-- **邻居演化**：LLM 驱动的 3 步分解（判断→计划→执行），基于 A-MEM 论文改进
-- **Obsidian 导出**：记忆导出为 Obsidian 笔记 + MOC + 关联图谱
-- **中文支持**：字符级 + bigram 分词，完整中文检索链路
+### 管理层
 
-## 架构
+| 角色 | 身份 | 职责 |
+|------|------|------|
+| **root** | 主会话协调器（Opus 4.6） | 分析需求、制定计划、分配任务、验证结果。不直接操作文件 |
+| **b1 / 惑者** | 用户（最终决策者） | 定义方向、创建角色、授权架构变更 |
+
+### 通用角色（日式命名，model: sonnet）
+
+| 角色 | 类型 | 职责 | 权限 |
+|------|------|------|------|
+| **kaze（风者）** | Explore | 代码探索、文件搜索、结构理解 | 只读 |
+| **mirin（観者）** | Explore | 代码探索（第二探索者） | 只读 |
+| **shin（審者）** | Auditor | 只读审计、质量评分、测试验证 | 只读 |
+| **tetsu（鉄者）** | Worker | 文件修改、bug 修复、配置更新 | 读写 |
+| **sora（空者）** | Operator | 运维操作、环境设置 | 读写 |
+| **yomi（読者）** | Analyst | 数据分析、模式识别、研究 | 只读为主 |
+| **haku（白者）** | Inspector | 代码审查（质量/安全/可维护性） | 只读 + lint/test |
+
+### Singleton 角色（中文命名，b1 亲创）
+
+| 角色 | 代号 | 职责 | 独占权限 |
+|------|------|------|----------|
+| **吞食者** | raiga | 吞食书籍/文档 → 产出 skill 和 CLAUDE.md 约束 | 内容消化与知识提炼 |
+| **图书管理员** | fumio | 管理所有书籍、项目文件、文档 | 知识库组织 |
+| **母体** | norna | 创造与销毁 subagent | agent 生命周期管理 |
+| **梦者** | yume | 管理所有 agent 的记忆（~/mem/mem/） | 记忆系统唯一管理者 |
+
+## 生命周期管理
+
+### 不朽 Agent
+b1 直接创建的 11 个 agent 永不消亡。
+
+### 可消亡 Agent
+母体创建的新 subagent，反馈过差时触发消亡：
 
 ```
-scripts/
-├── memory_store.py    # 数据模型 + JSONL 持久化
-├── retriever.py       # BM25 + 三维评分检索
-├── associator.py      # 双向关联管理
-├── extractor.py       # Claude API 字段提取
-├── inject.py          # Prompt 注入 + 被动演化
-├── evolver.py         # LLM 驱动邻居演化
-├── registry.py        # 角色注册与管理
-├── obsidian_export.py # Obsidian 导出
-└── cli.py             # CLI 入口
-
-tests/
-├── test_retriever.py      # 检索测试
-├── test_extractor.py      # 提取测试
-├── test_inject.py         # 注入测试
-├── test_evolver.py        # 演化测试
-├── test_integration.py    # 端到端集成测试
-└── test_multi_agent.py    # 多角色测试
+反馈过差 → root/b1 决定消亡
+  → 母体执行销毁（registry 移除 + 目录清理）
+  → 吞食者吞食全部信息 → 提炼为 skill/约束（知识不浪费）
+  → 梦者清理记忆索引
 ```
 
-## 角色系统
+## 核心机制
 
-| 类型 | 职责 | 名字池 |
-|------|------|--------|
-| Explore | 代码库探索、信息收集 | Kaze, Mirin, Soren, Vento, Cirro |
-| Worker | 文件修改、代码实现 | Tetsu, Aspen, Ember, Riven, Cobalt |
-| Auditor | 代码审查、质量审计 | Shin, Onyx, Argon, Quartz, Flint |
-| Operator | 通用任务执行 | Sora, Nimba, Prism, Helix, Pulse |
-| Analyst | 分析、研究 | Yomi, Lyric, Astra, Cipher, Nexus |
-| Inspector | 检查、验证 | Haku, Rune, Velox, Ignis, Terra |
+### 1. WhoAmI 注入
+每次唤醒 subagent 时，将其 `WhoAmI.md` 注入 prompt 开头，确保 agent 知道自己是谁、边界在哪。
 
-## 使用
+### 2. 越权拒绝
+超出工作范围的任务 → 拒绝 + 说明原因 + 推荐正确角色。
 
-### CLI
+### 3. Feedback 反馈
+每个 agent 目录下有 `feedback_*.md` 文件，记录好/坏行为，用于持续改进。
+
+### 4. 强制记忆保存
+每个 subagent 任务完成前，必须通过 `quick-add` CLI 保存一条任务记忆。不保存 = 任务未完成。
+
+### 5. 独立验证
+shin 审计 → tetsu 修复 → shin 重验。不信任 subagent 自报结果。
+
+### 6. 决策自主权
+root 按影响程度分级决策：低影响直接做，中影响做后汇报，高影响请示 b1。
+
+## 记忆存储
+
+### 目录结构
+
+```
+~/mem/mem/
+├── agents/                    # subagent 记忆
+│   ├── Explore/
+│   │   ├── kaze/              # 记忆文件 + WhoAmI.md + feedback
+│   │   └── mirin/
+│   ├── Auditor/shin/
+│   ├── Worker/tetsu/
+│   ├── Operator/sora/
+│   ├── Analyst/yomi/
+│   ├── Inspector/haku/
+│   ├── 吞食者/raiga/
+│   ├── 图书管理员/fumio/
+│   ├── 母体/norna/
+│   ├── 梦者/yume/
+│   └── README.md
+├── root/                      # root 协调器记忆
+├── shared/                    # 跨 agent 共享记忆
+└── auto-memory/               # Claude Code 原生 auto-memory
+```
+
+### 记忆格式
+
+每条记忆是一个独立 `.md` 文件，包含 YAML frontmatter + 正文：
+
+```markdown
+---
+id: task_验证记忆保存机制修复
+name: 验证记忆保存机制修复
+description: 测试通过 + 5项验证全部通过
+type: task
+keywords: [记忆保存, 验证, agent-memory]
+tags: [verification]
+importance: 5
+context: Task #65 修复验证
+created_at: '2026-03-13T15:30:00'
+owner: shin
+scope: personal
+---
+
+验证内容：agent-memory 全量测试 93/93 通过...
+```
+
+### 记忆类型
+
+| type | 用途 |
+|------|------|
+| `user` | 用户身份、偏好、知识背景 |
+| `feedback` | 行为纠正、工作流改进 |
+| `task` | 任务执行记录（最常用） |
+| `knowledge` | 学到的技术知识 |
+| `project` | 项目状态、决策、里程碑 |
+| `reference` | 外部资源指针 |
+
+## 技术架构
+
+### 检索引擎
+- **BM25** 关键词检索
+- **三维评分**：relevance（相关性）+ recency（时效性）+ importance（重要性）
+- **扩散激活**：通过 `related_ids` 拉入关联记忆
+
+### 核心模块
+
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| 存储 | `scripts/memory_store.py` | .md 文件持久化 + YAML frontmatter |
+| 检索 | `scripts/retriever.py` | BM25 + 三维评分检索 |
+| 提取 | `scripts/extractor.py` | Claude API 字段提取 |
+| 注入 | `scripts/inject.py` | prompt 注入 + 被动演化 |
+| 关联 | `scripts/associator.py` | 双向关联管理 |
+| 导出 | `scripts/obsidian_export.py` | Obsidian 笔记导出 |
+| CLI | `scripts/cli.py` | 命令行入口 |
+| 注册 | `scripts/registry.py` | agent 注册管理 |
+
+### CLI 使用
 
 ```bash
 # 添加记忆
-python scripts/cli.py add "LaTeX 编译失败，fontspec 找不到字体"
+python3 scripts/cli.py quick-add \
+  --agent shin \
+  --name "审计结果" \
+  --description "CLAUDE.md 审计通过" \
+  --type task \
+  --store ~/mem/mem/agents/Auditor/shin \
+  "审计内容详情..."
 
 # 检索记忆
-python scripts/cli.py retrieve "字体编译错误"
+python3 scripts/cli.py retrieve \
+  --store ~/mem/mem/agents/Auditor/shin \
+  --query "审计" --top-k 5
 
-# 带角色检索
-python scripts/cli.py --agent kaze retrieve "字体编译错误"
+# 列出记忆
+python3 scripts/cli.py list --store ~/mem/mem/agents/Worker/tetsu
 
-# 查看统计
-python scripts/cli.py stats
+# 生成索引
+python3 scripts/cli.py generate-index --store ~/mem/mem/agents/Auditor/shin
 
-# 导出到 Obsidian
-python scripts/cli.py export --output ./obsidian_notes/
+# 统计
+python3 scripts/cli.py stats --store ~/mem/mem/agents/Worker/tetsu
 ```
 
-### 作为 Claude Code Skill
-
-将本项目放置于 `~/.claude/skills/agent-memory/`，Claude Code 会自动识别 SKILL.md 并启用记忆功能。
-
-## 测试
+### 测试
 
 ```bash
-python -m pytest tests/ -v
+cd ~/.claude/skills/agent-memory
+python -m pytest tests/ -v    # 93 tests, all passing
 ```
 
-69 个测试，覆盖单元测试 + 集成测试 + 多角色测试。
+## 工作流示例
 
-## 致谢
-
-邻居演化机制参考了 [A-MEM](https://github.com/WujiangXu/A-mem) 论文的 `update_neighbor` 模式。
+```
+b1 提出需求
+  → root 分析、创建 Task、分配角色
+    → kaze 探索代码（注入 WhoAmI）
+    → tetsu 执行修改（注入 WhoAmI）
+    → shin 审计验证（注入 WhoAmI）
+    → 每个 agent 完成后保存任务记忆
+  → root 验证结果（独立检查，不信任自报）
+  → root 更新项目主页迭代日志
+  → root 保存 root 记忆
+```
 
 ## License
 
