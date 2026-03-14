@@ -473,6 +473,73 @@ def cmd_export(args):
             print(f"  Note: {p}")
 
 
+def cmd_dashboard(args):
+    """一站式系统健康概览。"""
+    store = get_store(args)
+    memories = store.load_all()
+
+    from feedback_loop import check_memory_health
+    from trigger_tracker import get_all_stats
+
+    # === 区域 1：记忆健康分布 ===
+    health_stats = {"healthy": 0, "warning": 0, "blocked": 0}
+    blocked_list = []
+    for mem in memories:
+        try:
+            h = check_memory_health(mem)
+            health_stats[h] += 1
+            if h == "blocked":
+                blocked_list.append(f"  - {mem.id}: {mem.name or mem.content[:40]}")
+        except Exception:
+            pass
+
+    print("=" * 50)
+    print("📊 Agent Memory System Dashboard")
+    print("=" * 50)
+    print(f"\n## 记忆健康 ({len(memories)} 条)")
+    print(f"  Healthy: {health_stats['healthy']}")
+    print(f"  Warning: {health_stats['warning']}")
+    print(f"  Blocked: {health_stats['blocked']}")
+    if blocked_list:
+        print("\n  Blocked 记忆:")
+        for b in blocked_list[:5]:
+            print(b)
+
+    # === 区域 2：触发规则效率 ===
+    trigger_stats_path = Path(os.path.expanduser("~/mem/mem/workflows/trigger-stats.json"))
+    if getattr(args, 'trigger_stats', None):
+        trigger_stats_path = Path(args.trigger_stats)
+    stats = get_all_stats(trigger_stats_path)
+    rules = stats.get("rules", {})
+    if rules:
+        print(f"\n## 触发效率 ({len(rules)} 条规则)")
+        for name, data in sorted(rules.items(), key=lambda x: x[1].get("weight", 1.0), reverse=True):
+            total = data.get("success", 0) + data.get("failure", 0)
+            eff = data["success"] / total * 100 if total > 0 else 0
+            print(f"  {name}: 效率 {eff:.0f}% | 权重 {data.get('weight', 1.0):.1f} | 触发 {total} 次")
+    else:
+        print("\n## 触发效率: 暂无数据")
+
+    # === 区域 3：反馈统计 ===
+    total_pos = sum(m.positive_feedback for m in memories)
+    total_neg = sum(m.negative_feedback for m in memories)
+    print(f"\n## 反馈统计")
+    print(f"  总正面: {total_pos}")
+    print(f"  总负面: {total_neg}")
+    if total_pos + total_neg > 0:
+        print(f"  整体比率: {total_pos / (total_pos + total_neg):.1%}")
+
+    # === 区域 4：系统概要 ===
+    print(f"\n## 系统概要")
+    print(f"  总记忆: {len(memories)}")
+    if memories:
+        avg_imp = sum(m.importance for m in memories) / len(memories)
+        print(f"  平均 importance: {avg_imp:.1f}")
+    else:
+        print("  无记忆")
+    print("=" * 50)
+
+
 def cmd_consolidate(args):
     """扫描记忆库，合并相似记忆对。"""
     from consolidator import consolidate
@@ -615,6 +682,11 @@ def main():
     p_health.add_argument("--show-all", action="store_true", dest="show_all",
                           help="显示所有记忆（不仅问题记忆）")
 
+    # ---- dashboard ----
+    p_dashboard = subparsers.add_parser("dashboard", help="一站式系统健康概览")
+    p_dashboard.add_argument("--trigger-stats", dest="trigger_stats", default=None,
+                             help="trigger-stats.json 路径（可选，默认 ~/mem/mem/workflows/trigger-stats.json）")
+
     # ---- trigger ----
     p_trigger = subparsers.add_parser("trigger", help="触发效率追踪：record/stats/adjust")
     trigger_sub = p_trigger.add_subparsers(dest="trigger_cmd", metavar="TRIGGER_CMD")
@@ -657,6 +729,7 @@ def main():
         "consolidate": cmd_consolidate,
         "health-check": cmd_health_check,
         "trigger": cmd_trigger,
+        "dashboard": cmd_dashboard,
     }
     commands[args.command](args)
 

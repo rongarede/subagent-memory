@@ -791,3 +791,147 @@ class TestEdgeCases:
             assert result["previous_score"] == 3
         finally:
             shutil.rmtree(tmp_dir)
+
+
+# ==================== CLI dashboard 测试 ====================
+
+class TestCLIDashboard:
+    """测试 dashboard 子命令。"""
+
+    def test_dashboard_basic_output(self):
+        """dashboard 输出包含四个核心区域：记忆健康、触发效率、反馈统计、系统概要。"""
+        import subprocess
+        import json
+
+        tmp_dir = tempfile.mkdtemp()
+        trigger_stats_file = os.path.join(tmp_dir, "trigger-stats.json")
+        try:
+            store = MemoryStore(store_path=tmp_dir)
+            mem = make_memory(id="mem_dash_001", positive_feedback=3, negative_feedback=1, importance=7)
+            store.add(mem)
+
+            cli_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'cli.py')
+            result = subprocess.run(
+                [
+                    sys.executable, cli_path,
+                    "--store", tmp_dir,
+                    "dashboard",
+                    "--trigger-stats", trigger_stats_file,
+                ],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            assert result.returncode == 0, f"dashboard 应成功退出，stderr: {result.stderr}"
+            assert "记忆健康" in output, f"输出应包含记忆健康区域，实际：{output}"
+            assert "反馈统计" in output, f"输出应包含反馈统计区域，实际：{output}"
+            assert "系统概要" in output, f"输出应包含系统概要区域，实际：{output}"
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_dashboard_with_mixed_health(self):
+        """dashboard 正确显示混合健康状态的计数。"""
+        import subprocess
+        import json
+
+        tmp_dir = tempfile.mkdtemp()
+        trigger_stats_file = os.path.join(tmp_dir, "trigger-stats.json")
+        try:
+            store = MemoryStore(store_path=tmp_dir)
+            # healthy: pos=5, neg=0
+            store.add(make_memory(id="mem_healthy_001", positive_feedback=5, negative_feedback=0))
+            # warning: pos=1, neg=3
+            store.add(make_memory(id="mem_warning_001", positive_feedback=1, negative_feedback=3))
+            # blocked: pos=0, neg=5
+            store.add(make_memory(id="mem_blocked_001", positive_feedback=0, negative_feedback=5))
+
+            cli_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'cli.py')
+            result = subprocess.run(
+                [
+                    sys.executable, cli_path,
+                    "--store", tmp_dir,
+                    "dashboard",
+                    "--trigger-stats", trigger_stats_file,
+                ],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            assert result.returncode == 0, f"dashboard 应成功退出，stderr: {result.stderr}"
+            assert "Healthy: 1" in output, f"应显示 Healthy: 1，实际：{output}"
+            assert "Warning: 1" in output, f"应显示 Warning: 1，实际：{output}"
+            assert "Blocked: 1" in output, f"应显示 Blocked: 1，实际：{output}"
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_dashboard_with_trigger_stats(self):
+        """dashboard 显示触发规则效率排名。"""
+        import subprocess
+        import json
+
+        tmp_dir = tempfile.mkdtemp()
+        trigger_stats_file = os.path.join(tmp_dir, "trigger-stats.json")
+        try:
+            store = MemoryStore(store_path=tmp_dir)
+            store.add(make_memory(id="mem_trigger_001"))
+
+            # 预写 trigger stats 文件
+            stats_data = {
+                "rules": {
+                    "memory_flush": {
+                        "success": 8,
+                        "failure": 2,
+                        "skip": 0,
+                        "weight": 1.2,
+                        "last_triggered": "2026-03-14T10:00:00",
+                    }
+                },
+                "updated_at": "2026-03-14T10:00:00",
+            }
+            Path(trigger_stats_file).write_text(
+                json.dumps(stats_data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+
+            cli_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'cli.py')
+            result = subprocess.run(
+                [
+                    sys.executable, cli_path,
+                    "--store", tmp_dir,
+                    "dashboard",
+                    "--trigger-stats", trigger_stats_file,
+                ],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            assert result.returncode == 0, f"dashboard 应成功退出，stderr: {result.stderr}"
+            assert "触发效率" in output, f"输出应包含触发效率区域，实际：{output}"
+            assert "memory_flush" in output, f"规则名应出现在输出中，实际：{output}"
+            assert "80%" in output, f"应显示 80% 效率，实际：{output}"
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_dashboard_empty_store(self):
+        """空 store 时 dashboard 不崩溃，正常输出。"""
+        import subprocess
+
+        tmp_dir = tempfile.mkdtemp()
+        trigger_stats_file = os.path.join(tmp_dir, "trigger-stats.json")
+        try:
+            cli_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'cli.py')
+            result = subprocess.run(
+                [
+                    sys.executable, cli_path,
+                    "--store", tmp_dir,
+                    "dashboard",
+                    "--trigger-stats", trigger_stats_file,
+                ],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            assert result.returncode == 0, f"空 store 时 dashboard 应成功退出，stderr: {result.stderr}"
+            assert "Dashboard" in output, f"输出应包含 Dashboard 标题，实际：{output}"
+            assert "0 条" in output, f"应显示 0 条记忆，实际：{output}"
+        finally:
+            shutil.rmtree(tmp_dir)
