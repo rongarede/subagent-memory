@@ -323,27 +323,58 @@ def cmd_generate_index(args):
 
 
 def cmd_feedback(args):
-    """为指定记忆记录使用反馈（有用 / 无用）。"""
+    """为指定记忆记录使用反馈（有用 / 无用 / 自动推断）。"""
     store = get_store(args)
+
+    # --auto 模式：调用 infer_memory_feedback 自动推断
+    if getattr(args, 'auto', False):
+        if not getattr(args, 'event', None):
+            print("错误：--auto 模式必须指定 --event 参数。")
+            sys.exit(1)
+        from feedback_loop import infer_memory_feedback
+        result = infer_memory_feedback(args.memory_id, args.event, store)
+        print(f"记忆 {result['memory_id']} 自动推断反馈已记录（event={result['event']}）。")
+        print(f"  delta_positive: +{result['delta_positive']} | delta_negative: +{result['delta_negative']}")
+        print(f"  positive: {result['new_positive']} | negative: {result['new_negative']}")
+        return
+
     memory = store.get(args.memory_id)
 
     if not memory:
         print(f"记忆 {args.memory_id} 不存在。")
         sys.exit(1)
 
-    if args.useful:
+    if getattr(args, 'useful', False):
         memory.positive_feedback += 1
         action = "positive"
-    elif args.not_useful:
+    elif getattr(args, 'not_useful', False):
         memory.negative_feedback += 1
         action = "negative"
     else:
-        print("错误：必须指定 --useful 或 --not-useful。")
+        print("错误：必须指定 --useful、--not-useful 或 --auto --event <event>。")
         sys.exit(1)
 
     store.update(memory)
     print(f"记忆 {memory.id} 反馈已记录（{action}）。")
     print(f"  positive: {memory.positive_feedback} | negative: {memory.negative_feedback}")
+
+
+def cmd_health_check(args):
+    """批量检查记忆库中所有记忆的健康状态。"""
+    store = get_store(args)
+    memories = store.load_all()
+
+    from feedback_loop import check_memory_health
+    stats = {"healthy": 0, "warning": 0, "blocked": 0}
+
+    for mem in memories:
+        health = check_memory_health(mem)
+        stats[health] += 1
+        if health != "healthy" or getattr(args, 'show_all', False):
+            print(f"[{health.upper()}] {mem.id}: {mem.name or mem.content[:40]} "
+                  f"(pos={mem.positive_feedback}, neg={mem.negative_feedback})")
+
+    print(f"\n总计: {stats['healthy']} healthy, {stats['warning']} warning, {stats['blocked']} blocked")
 
 
 def cmd_export(args):
@@ -490,11 +521,18 @@ def main():
 
     # ---- feedback ----
     p_feedback = subparsers.add_parser("feedback", help="为指定记忆记录使用反馈")
-    p_feedback.add_argument("--memory-id", required=True, help="要反馈的记忆 ID")
-    feedback_group = p_feedback.add_mutually_exclusive_group(required=True)
+    p_feedback.add_argument("--memory-id", required=True, dest="memory_id", help="要反馈的记忆 ID")
+    p_feedback.add_argument("--auto", action="store_true", help="自动推断模式（调用 infer_memory_feedback）")
+    p_feedback.add_argument("--event", help="事件类型（--auto 模式必填）：task_success|task_retry|audit_pass|audit_fail|user_positive|user_negative")
+    feedback_group = p_feedback.add_mutually_exclusive_group(required=False)
     feedback_group.add_argument("--useful", action="store_true", help="标记为有用（positive_feedback +1）")
     feedback_group.add_argument("--not-useful", action="store_true", dest="not_useful",
                                 help="标记为无用（negative_feedback +1）")
+
+    # ---- health-check ----
+    p_health = subparsers.add_parser("health-check", help="批量检查记忆健康状态（healthy/warning/blocked）")
+    p_health.add_argument("--show-all", action="store_true", dest="show_all",
+                          help="显示所有记忆（不仅问题记忆）")
 
     args = parser.parse_args()
 
@@ -513,6 +551,7 @@ def main():
         "export": cmd_export,
         "feedback": cmd_feedback,
         "consolidate": cmd_consolidate,
+        "health-check": cmd_health_check,
     }
     commands[args.command](args)
 

@@ -620,6 +620,108 @@ class TestFilterByHealth:
         assert len(result) == 5, f"5条 healthy 记忆应全部返回，实际：{len(result)}"
 
 
+# ==================== CLI 集成测试 ====================
+
+class TestCLIHealthCheck:
+    """测试 CLI health-check 子命令。"""
+
+    def test_cli_health_check_subcommand(self):
+        """health-check 子命令应输出正确格式（healthy/warning/blocked 统计行）。"""
+        import subprocess
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            store = MemoryStore(store_path=tmp_dir)
+            mem1 = make_memory(id="mem_hc_001", positive_feedback=5, negative_feedback=0)
+            store.add(mem1)
+
+            cli_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'cli.py')
+            result = subprocess.run(
+                [sys.executable, cli_path, "--store", tmp_dir, "health-check"],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            assert result.returncode == 0, f"health-check 应成功退出，stderr: {result.stderr}"
+            assert "healthy" in output.lower(), f"输出应包含 healthy 统计，实际输出：{output}"
+            assert "总计" in output, f"输出应包含总计行，实际输出：{output}"
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_cli_health_check_shows_blocked(self):
+        """health-check 应标记并显示 blocked 记忆。"""
+        import subprocess
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            store = MemoryStore(store_path=tmp_dir)
+            blocked_mem = make_memory(
+                id="mem_blocked_cli_001",
+                positive_feedback=0,
+                negative_feedback=5,
+            )
+            store.add(blocked_mem)
+
+            cli_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'cli.py')
+            result = subprocess.run(
+                [sys.executable, cli_path, "--store", tmp_dir, "health-check"],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            assert result.returncode == 0, f"health-check 应成功退出，stderr: {result.stderr}"
+            assert "BLOCKED" in output.upper(), (
+                f"blocked 记忆应被标记为 BLOCKED，实际输出：{output}"
+            )
+            assert "mem_blocked_cli_001" in output, (
+                f"输出应包含 blocked 记忆 ID，实际输出：{output}"
+            )
+        finally:
+            shutil.rmtree(tmp_dir)
+
+
+class TestCLIFeedbackAutoInfer:
+    """测试 CLI feedback --auto --event 自动推断模式。"""
+
+    def test_cli_feedback_auto_infer(self):
+        """feedback --auto --event task_success --memory-id X 应正确调用 infer_memory_feedback。"""
+        import subprocess
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            store = MemoryStore(store_path=tmp_dir)
+            mem = make_memory(
+                id="mem_autofeedback_001",
+                positive_feedback=0,
+                negative_feedback=0,
+            )
+            store.add(mem)
+
+            cli_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'cli.py')
+            result = subprocess.run(
+                [
+                    sys.executable, cli_path,
+                    "--store", tmp_dir,
+                    "feedback",
+                    "--memory-id", "mem_autofeedback_001",
+                    "--auto",
+                    "--event", "task_success",
+                ],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            assert result.returncode == 0, f"feedback --auto 应成功退出，stderr: {result.stderr}"
+
+            # 验证记忆实际被更新（task_success → +1 positive）
+            updated = store.get("mem_autofeedback_001")
+            assert updated.positive_feedback == 1, (
+                f"task_success 应 positive_feedback +1，实际：{updated.positive_feedback}\n输出：{output}"
+            )
+        finally:
+            shutil.rmtree(tmp_dir)
+
+
 # ==================== 边界测试（补充覆盖） ====================
 
 class TestEdgeCases:
