@@ -228,6 +228,7 @@ def generate_evolution_plan(
         # 最多更新 3 个邻居
         return updates[:3]
     except Exception as e:
+        print(f"[evolver] generate_evolution_plan error: {e}", file=sys.stderr)
         return []
 
 
