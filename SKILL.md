@@ -80,6 +80,9 @@ python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu stats
 
 # 生成索引
 python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu generate-index
+
+# 一站式健康概览（blocked/warning/healthy 分布 + 衰减统计）
+python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu dashboard
 ```
 
 ## 路径约束
@@ -97,7 +100,7 @@ python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu generate-index
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python3 -m pytest  # 234 tests, ~5s
+python3 -m pytest  # 247 tests, ~5s
 ```
 
 ## 架构演进

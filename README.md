@@ -218,6 +218,12 @@ python3 scripts/cli.py \
   --agent tetsu \
   --store ~/mem/mem/agents/蚁工/tetsu \
   trigger stats
+
+# 一站式健康概览（blocked/warning/healthy 分布 + 衰减统计）
+python3 scripts/cli.py \
+  --agent tetsu \
+  --store ~/mem/mem/agents/蚁工/tetsu \
+  dashboard
 ```
 
 ### Phase 2: Memory Consolidation + Decay
@@ -231,6 +237,13 @@ python3 scripts/cli.py \
 - **手动覆盖**：用户反馈权重 ×3，可纠正自动推断
 - **渐进式升级**：降权(1次) → 告警(3次) → 阻断(5次)，防止反复踩坑
 - **健康检查**：记忆分 healthy/warning/blocked 三级，检索时自动过滤
+- **decay + feedback 联动**：正面反馈减缓衰减速率，负面反馈加速衰减
+
+### Round 2: 深度集成
+
+- **decay + feedback 联动**：`feedback_loop.py` 产生的正面反馈降低衰减系数，使高质量记忆更持久
+- **consolidator + health 联动**：`consolidator.py` 合并时跳过 `blocked` 状态记忆，保持记忆库健康
+- **CLI dashboard**：一站式健康概览，汇总 blocked/warning/healthy 分布及衰减统计
 
 ### 路径约束（CRITICAL）
 
@@ -254,7 +267,7 @@ python3 scripts/cli.py \
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python -m pytest tests/ -v    # 234 tests, all passing
+python -m pytest tests/ -v    # 247 tests, all passing
 ```
 
 ## 工作流示例
