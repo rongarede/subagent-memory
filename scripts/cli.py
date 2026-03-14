@@ -415,6 +415,16 @@ def cmd_trigger(args):
         if suggestion:
             print(f"  建议:       {suggestion}")
 
+    elif args.trigger_cmd is None:
+        if hasattr(args, '_trigger_parser'):
+            args._trigger_parser.print_help()
+        else:
+            print("用法: cli.py trigger {record,stats,adjust}")
+            print("子命令: record  记录一次触发结果")
+            print("        stats   查询触发统计")
+            print("        adjust  根据效率调整触发权重")
+        return
+
     else:
         print(f"未知 trigger 子命令: {args.trigger_cmd!r}")
         sys.exit(1)
@@ -623,6 +633,9 @@ def main():
                       help="当前权重（默认 1.0）")
 
     args = parser.parse_args()
+
+    # 将 p_trigger 注入 args，以便 cmd_trigger 调用 print_help()
+    args._trigger_parser = p_trigger
 
     if not args.command:
         parser.print_help()

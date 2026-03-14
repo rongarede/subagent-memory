@@ -163,6 +163,14 @@ def adjust_weight(
     if efficiency < EFFICIENCY_DISABLE and total_triggers >= DISABLE_MIN_TRIGGERS:
         suggestion = "disable"
 
+    # 持久化 weight
+    with _lock:
+        stats = _load_stats(stats_path)
+        if rule_name in stats.get("rules", {}):
+            stats["rules"][rule_name]["weight"] = new_weight
+            stats["updated_at"] = datetime.now().isoformat()
+            _save_stats(stats, stats_path)
+
     return (new_weight, suggestion)
 
 

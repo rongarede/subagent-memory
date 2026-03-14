@@ -195,7 +195,7 @@ def test_stats_file_concurrent_safe(tmp_path):
         t.join()
 
     assert len(errors) == 0
-    # 结果应至少有部分写入（不崩溃即可）
     data = json.loads(stats_path.read_text())
     assert "rules" in data
     assert "并发规则" in data["rules"]
+    assert data["rules"]["并发规则"]["success"] == 10
