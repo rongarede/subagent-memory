@@ -322,6 +322,30 @@ def cmd_generate_index(args):
     print(f"索引已生成: {output}")
 
 
+def cmd_feedback(args):
+    """为指定记忆记录使用反馈（有用 / 无用）。"""
+    store = get_store(args)
+    memory = store.get(args.memory_id)
+
+    if not memory:
+        print(f"记忆 {args.memory_id} 不存在。")
+        sys.exit(1)
+
+    if args.useful:
+        memory.positive_feedback += 1
+        action = "positive"
+    elif args.not_useful:
+        memory.negative_feedback += 1
+        action = "negative"
+    else:
+        print("错误：必须指定 --useful 或 --not-useful。")
+        sys.exit(1)
+
+    store.update(memory)
+    print(f"记忆 {memory.id} 反馈已记录（{action}）。")
+    print(f"  positive: {memory.positive_feedback} | negative: {memory.negative_feedback}")
+
+
 def cmd_export(args):
     """Export memories to Obsidian notes + graph."""
     from obsidian_export import export_all
@@ -420,6 +444,14 @@ def main():
     # ---- generate-index ----
     subparsers.add_parser("generate-index", help="按类型生成 MEMORY.md 索引")
 
+    # ---- feedback ----
+    p_feedback = subparsers.add_parser("feedback", help="为指定记忆记录使用反馈")
+    p_feedback.add_argument("--memory-id", required=True, help="要反馈的记忆 ID")
+    feedback_group = p_feedback.add_mutually_exclusive_group(required=True)
+    feedback_group.add_argument("--useful", action="store_true", help="标记为有用（positive_feedback +1）")
+    feedback_group.add_argument("--not-useful", action="store_true", dest="not_useful",
+                                help="标记为无用（negative_feedback +1）")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -435,6 +467,7 @@ def main():
         "evolve": cmd_evolve,
         "list": cmd_list,
         "export": cmd_export,
+        "feedback": cmd_feedback,
     }
     commands[args.command](args)
 

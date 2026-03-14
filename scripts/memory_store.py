@@ -34,6 +34,9 @@ class Memory:
     name: str = ""                                         # 人类可读短名
     description: str = ""                                  # 一句话摘要（用于索引）
     type: str = "task"                                     # user|feedback|task|knowledge|project|reference
+    # Phase 1B: Retrieval Feedback
+    positive_feedback: int = 0                             # 有用反馈次数
+    negative_feedback: int = 0                             # 无用反馈次数
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -51,6 +54,8 @@ class Memory:
         filtered.setdefault('name', '')
         filtered.setdefault('description', '')
         filtered.setdefault('type', 'task')
+        filtered.setdefault('positive_feedback', 0)
+        filtered.setdefault('negative_feedback', 0)
         return cls(**filtered)
 
 
@@ -106,6 +111,8 @@ class MemoryStore:
             "related": related,
             "accessed_by": memory.accessed_by or [],
             "evolution_history": memory.evolution_history or [],
+            "positive_feedback": memory.positive_feedback,
+            "negative_feedback": memory.negative_feedback,
         }
 
         yaml_text = yaml.safe_dump(frontmatter, allow_unicode=True, sort_keys=False)
@@ -157,6 +164,8 @@ class MemoryStore:
             "scope": meta.get("scope") or "personal",
             "accessed_by": meta.get("accessed_by") or [],
             "evolution_history": meta.get("evolution_history") or [],
+            "positive_feedback": max(0, int(meta.get("positive_feedback") or 0)),
+            "negative_feedback": max(0, int(meta.get("negative_feedback") or 0)),
         }
         return Memory.from_dict(data)
 

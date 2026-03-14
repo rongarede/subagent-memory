@@ -72,6 +72,34 @@ def compute_importance(memory: Memory) -> float:
     return max(0.0, min(1.0, memory.importance / 10.0))
 
 
+def compute_importance_score(memory: Memory) -> float:
+    """Phase 1 改进版重要性评分，纳入 Active Recall 和 Retrieval Feedback。
+
+    公式：
+        base         = memory.importance / 10.0
+        recall_bonus = min(0.2, access_count * 0.02)          # Phase 1A
+        feedback_adj = (ratio - 0.5) * confidence * 0.4       # Phase 1B
+            ratio      = positive_feedback / total_feedback
+            confidence = min(1.0, total_feedback / 10)
+        score        = clamp(base + recall_bonus + feedback_adj, 0.0, 1.0)
+    """
+    base = memory.importance / 10.0
+
+    # Phase 1A: Active Recall bonus
+    recall_bonus = min(0.2, memory.access_count * 0.02)
+
+    # Phase 1B: Feedback adjustment
+    total_fb = memory.positive_feedback + memory.negative_feedback
+    if total_fb > 0:
+        feedback_ratio = memory.positive_feedback / total_fb
+        confidence = min(1.0, total_fb / 10)
+        feedback_adj = (feedback_ratio - 0.5) * confidence * 0.4  # [-0.2, +0.2]
+    else:
+        feedback_adj = 0.0
+
+    return max(0.0, min(1.0, base + recall_bonus + feedback_adj))
+
+
 def compute_relevance_scores(query: str, memories: list[Memory]) -> list[float]:
     """Compute BM25 relevance scores for a query against memories.
 
@@ -135,7 +163,7 @@ def retrieve(
     scored = []
     for i, mem in enumerate(memories):
         recency = compute_recency(mem, now=now)
-        importance = compute_importance(mem)
+        importance = compute_importance_score(mem)
         relevance = relevance_scores[i]
 
         total = recency + importance + relevance
