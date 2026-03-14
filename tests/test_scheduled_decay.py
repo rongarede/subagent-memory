@@ -422,6 +422,7 @@ class TestEmptyStoresSkipped:
                 cooldown_hours=24,
             )
 
+        assert executed is True, "无 store 时也应返回 True（执行了扫描，只是无需衰减）"
         assert len(decay_calls) == 0, "无 store 时不应调用衰减"
 
 
