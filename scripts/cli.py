@@ -326,6 +326,11 @@ def cmd_feedback(args):
     """为指定记忆记录使用反馈（有用 / 无用 / 自动推断）。"""
     store = get_store(args)
 
+    # --auto 与 --useful/--not-useful 互斥
+    if getattr(args, 'auto', False) and (getattr(args, 'useful', False) or getattr(args, 'not_useful', False)):
+        print("错误：--auto 与 --useful/--not-useful 互斥，请勿同时使用。")
+        sys.exit(1)
+
     # --auto 模式：调用 infer_memory_feedback 自动推断
     if getattr(args, 'auto', False):
         if not getattr(args, 'event', None):
@@ -424,13 +429,20 @@ def cmd_health_check(args):
     stats = {"healthy": 0, "warning": 0, "blocked": 0}
 
     for mem in memories:
-        health = check_memory_health(mem)
-        stats[health] += 1
-        if health != "healthy" or getattr(args, 'show_all', False):
-            print(f"[{health.upper()}] {mem.id}: {mem.name or mem.content[:40]} "
-                  f"(pos={mem.positive_feedback}, neg={mem.negative_feedback})")
+        try:
+            health = check_memory_health(mem)
+            stats[health] += 1
+            if health != "healthy" or getattr(args, 'show_all', False):
+                print(f"[{health.upper()}] {mem.id}: {mem.name or mem.content[:40]} "
+                      f"(pos={mem.positive_feedback}, neg={mem.negative_feedback})")
+        except Exception as e:
+            print(f"[ERROR] {mem.id}: {e}")
+            stats.setdefault("error", 0)
+            stats["error"] += 1
 
-    print(f"\n总计: {stats['healthy']} healthy, {stats['warning']} warning, {stats['blocked']} blocked")
+    error_count = stats.get("error", 0)
+    error_str = f", {error_count} error" if error_count else ""
+    print(f"\n总计: {stats['healthy']} healthy, {stats['warning']} warning, {stats['blocked']} blocked{error_str}")
 
 
 def cmd_export(args):

@@ -137,7 +137,7 @@ class TestRetrieveIncludesWarningByDefault:
             shutil.rmtree(tmp_dir)
 
 
-class TestRetrieveWarningSoreReduced:
+class TestRetrieveWarningScoreReduced:
     """test_retrieve_warning_score_reduced
 
     warning 记忆的 score 被降权（×0.5）。
