@@ -32,8 +32,10 @@ DEFAULT_EXPORT_DIR = str(Path(os.path.expanduser("~/Obsidian/300_Resources/Agent
 def get_store(args) -> MemoryStore:
     """根据参数创建合适的 MemoryStore。
 
-    优先级：--agent 参数 > --store 参数 > 默认路径。
+    优先级：--store 参数 > --agent 参数 > 默认路径。
     """
+    if getattr(args, 'store', None) and args.store != DEFAULT_STORE:
+        return MemoryStore(store_path=args.store)
     if getattr(args, 'agent', None):
         from registry import AgentRegistry
         registry = AgentRegistry()
