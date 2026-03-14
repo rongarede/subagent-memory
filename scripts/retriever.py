@@ -240,6 +240,73 @@ def retrieve(
     return results
 
 
+# ==================== 跨 Store 联合检索 ====================
+
+def retrieve_cross_agent(
+    query: str,
+    stores: list,
+    top_k: int = 5,
+    spread: bool = False,
+    now: Optional[datetime] = None,
+    annotate_source: bool = False,
+) -> list:
+    """跨多个 agent store 联合检索并去重排序。
+
+    对每个 store 过采样（top_k*2），合并所有候选，按 score 降序排序，
+    去重（相同 memory ID 取最高分），返回 top_k 条。
+
+    Args:
+        query: 搜索查询文本
+        stores: MemoryStore 实例列表
+        top_k: 返回结果数
+        spread: 是否启用扩散激活（单 store 内）
+        now: 当前时间（用于测试）
+        annotate_source: 若为 True，返回 (Memory, score, source_name) 三元组；
+                         否则返回 (Memory, score) 二元组
+
+    Returns:
+        若 annotate_source=False: list[tuple[Memory, float]]
+        若 annotate_source=True:  list[tuple[Memory, float, str]]
+    """
+    if not stores:
+        return []
+
+    oversample_k = top_k * 2
+
+    # 从每个 store 过采样，记录来源
+    all_candidates: list[tuple[object, float, str]] = []  # (Memory, score, source_name)
+
+    for store in stores:
+        try:
+            source_name = str(store.store_path) if hasattr(store, 'store_path') else ""
+            results = retrieve(query, store, top_k=oversample_k, spread=spread, now=now)
+            for mem, score in results:
+                all_candidates.append((mem, score, source_name))
+        except Exception:
+            # 不存在的 store 或空 store 跳过
+            continue
+
+    if not all_candidates:
+        return []
+
+    # 去重：相同 memory ID 取最高分，保留对应的 source
+    seen: dict[str, tuple[object, float, str]] = {}
+    for mem, score, source in all_candidates:
+        if mem.id not in seen or score > seen[mem.id][1]:
+            seen[mem.id] = (mem, score, source)
+
+    # 按 score 降序排序
+    deduped = sorted(seen.values(), key=lambda x: x[1], reverse=True)
+
+    # 取 top_k
+    top = deduped[:top_k]
+
+    if annotate_source:
+        return [(mem, score, source) for mem, score, source in top]
+    else:
+        return [(mem, score) for mem, score, _ in top]
+
+
 # ==================== 提示词格式化 ====================
 
 def format_for_prompt(results: list[tuple[Memory, float]], max_items: int = 5) -> str:

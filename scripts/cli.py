@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from memory_store import Memory, MemoryStore
-from retriever import retrieve, format_for_prompt
+from retriever import retrieve, retrieve_cross_agent, format_for_prompt
 
 
 DEFAULT_STORE = os.path.expanduser("~/.claude/memory/memories")
@@ -49,6 +49,63 @@ def get_store(args) -> MemoryStore:
 
 def cmd_retrieve(args):
     """检索与查询最相关的记忆，按三维评分排序。"""
+
+    # --cross-agent 模式：自动扫描所有 agent store
+    if getattr(args, 'cross_agent', False):
+        agents_base = Path(os.path.expanduser("~/mem/mem/agents"))
+        stores = []
+        if agents_base.exists():
+            for store_path in sorted(agents_base.glob("*/*")):
+                if store_path.is_dir():
+                    stores.append(MemoryStore(store_path=str(store_path)))
+        results = retrieve_cross_agent(
+            query=args.query,
+            stores=stores,
+            top_k=args.top_k,
+            spread=not args.no_spread,
+        )
+        if not results:
+            print("未找到相关记忆。")
+            return
+        if args.format == "prompt":
+            print(format_for_prompt(results))
+        else:
+            for mem, score in results:
+                print(f"[{score:.2f}] {mem.id}: {mem.content}")
+                print(f"         keywords: {', '.join(mem.keywords)}")
+                print(f"         context:  {mem.context}")
+                print(f"         importance: {mem.importance}/10 | accessed: {mem.access_count}x")
+                if mem.related_ids:
+                    print(f"         links: {', '.join(mem.related_ids)}")
+                print()
+        return
+
+    # --stores 模式：指定多个 store 路径进行跨检索
+    if getattr(args, 'stores', None):
+        store_paths = [p.strip() for p in args.stores.split(",") if p.strip()]
+        stores = [MemoryStore(store_path=p) for p in store_paths]
+        results = retrieve_cross_agent(
+            query=args.query,
+            stores=stores,
+            top_k=args.top_k,
+            spread=not args.no_spread,
+        )
+        if not results:
+            print("未找到相关记忆。")
+            return
+        if args.format == "prompt":
+            print(format_for_prompt(results))
+        else:
+            for mem, score in results:
+                print(f"[{score:.2f}] {mem.id}: {mem.content}")
+                print(f"         keywords: {', '.join(mem.keywords)}")
+                print(f"         context:  {mem.context}")
+                print(f"         importance: {mem.importance}/10 | accessed: {mem.access_count}x")
+                if mem.related_ids:
+                    print(f"         links: {', '.join(mem.related_ids)}")
+                print()
+        return
+
     store = get_store(args)
 
     # 当指定 --agent 时使用合并检索（个人 + 同类型 + shared）
@@ -601,6 +658,18 @@ def main():
         choices=["text", "prompt"],
         default="text",
         help="输出格式：text（默认）或 prompt（适合注入 subagent）",
+    )
+    p_retrieve.add_argument(
+        "--cross-agent",
+        action="store_true",
+        dest="cross_agent",
+        help="跨 Agent 模式：自动扫描 ~/mem/mem/agents/*/ 下所有 store 进行联合检索",
+    )
+    p_retrieve.add_argument(
+        "--stores",
+        type=str,
+        default=None,
+        help="指定多个 store 路径（逗号分隔），进行跨 store 联合检索",
     )
 
     # ---- add ----
