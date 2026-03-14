@@ -359,6 +359,62 @@ def cmd_feedback(args):
     print(f"  positive: {memory.positive_feedback} | negative: {memory.negative_feedback}")
 
 
+def cmd_trigger(args):
+    """触发效率追踪：记录触发结果、查询统计、调整权重。"""
+    from trigger_tracker import record_trigger, get_efficiency, adjust_weight, get_all_stats
+
+    if args.trigger_cmd == "record":
+        result = record_trigger(args.rule, args.result)
+        print(f"已记录触发: 规则={args.rule!r} 结果={args.result}")
+        print(f"  success={result['success']} failure={result['failure']} skip={result['skip']}")
+        print(f"  last_triggered={result['last_triggered']}")
+
+    elif args.trigger_cmd == "stats":
+        if args.rule:
+            eff = get_efficiency(args.rule)
+            data = get_all_stats()
+            rule_data = data.get("rules", {}).get(args.rule, {})
+            print(f"=== 触发统计: {args.rule} ===")
+            if rule_data:
+                print(f"  success:  {rule_data.get('success', 0)}")
+                print(f"  failure:  {rule_data.get('failure', 0)}")
+                print(f"  skip:     {rule_data.get('skip', 0)}")
+                print(f"  weight:   {rule_data.get('weight', 1.0)}")
+                print(f"  效率:     {eff:.2%}")
+                print(f"  last:     {rule_data.get('last_triggered', 'N/A')}")
+            else:
+                print("  （无记录）")
+        else:
+            data = get_all_stats()
+            rules = data.get("rules", {})
+            if not rules:
+                print("暂无触发统计数据。")
+                return
+            print(f"=== 全部触发统计（{len(rules)} 条规则）===")
+            for name, rule_data in sorted(rules.items()):
+                s = rule_data.get("success", 0)
+                f = rule_data.get("failure", 0)
+                sk = rule_data.get("skip", 0)
+                total = s + f
+                eff = (s / total) if total > 0 else 0.5
+                print(f"  {name}: success={s} failure={f} skip={sk} 效率={eff:.2%} weight={rule_data.get('weight', 1.0)}")
+
+    elif args.trigger_cmd == "adjust":
+        current_weight = getattr(args, "current_weight", 1.0) or 1.0
+        new_weight, suggestion = adjust_weight(args.rule, current_weight=current_weight)
+        eff = get_efficiency(args.rule)
+        print(f"权重调整: 规则={args.rule!r}")
+        print(f"  效率:       {eff:.2%}")
+        print(f"  原权重:     {current_weight}")
+        print(f"  新权重:     {new_weight}")
+        if suggestion:
+            print(f"  建议:       {suggestion}")
+
+    else:
+        print(f"未知 trigger 子命令: {args.trigger_cmd!r}")
+        sys.exit(1)
+
+
 def cmd_health_check(args):
     """批量检查记忆库中所有记忆的健康状态。"""
     store = get_store(args)
@@ -534,6 +590,26 @@ def main():
     p_health.add_argument("--show-all", action="store_true", dest="show_all",
                           help="显示所有记忆（不仅问题记忆）")
 
+    # ---- trigger ----
+    p_trigger = subparsers.add_parser("trigger", help="触发效率追踪：record/stats/adjust")
+    trigger_sub = p_trigger.add_subparsers(dest="trigger_cmd", metavar="TRIGGER_CMD")
+
+    # trigger record
+    p_tr = trigger_sub.add_parser("record", help="记录一次触发结果")
+    p_tr.add_argument("--rule", required=True, help="规则名称")
+    p_tr.add_argument("--result", required=True, choices=["success", "failure", "skip"],
+                      help="触发结果：success | failure | skip")
+
+    # trigger stats
+    p_ts = trigger_sub.add_parser("stats", help="查询触发统计")
+    p_ts.add_argument("--rule", default=None, help="指定规则（不填则显示全部）")
+
+    # trigger adjust
+    p_ta = trigger_sub.add_parser("adjust", help="根据效率调整触发权重")
+    p_ta.add_argument("--rule", required=True, help="规则名称")
+    p_ta.add_argument("--current-weight", type=float, default=1.0, dest="current_weight",
+                      help="当前权重（默认 1.0）")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -552,6 +628,7 @@ def main():
         "feedback": cmd_feedback,
         "consolidate": cmd_consolidate,
         "health-check": cmd_health_check,
+        "trigger": cmd_trigger,
     }
     commands[args.command](args)
 
