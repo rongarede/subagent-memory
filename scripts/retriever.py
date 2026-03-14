@@ -163,6 +163,9 @@ def retrieve(
     if not memories:
         return []
 
+    # Health 缓存：一次计算，多次使用
+    health_cache = {mem.id: check_memory_health(mem) for mem in memories}
+
     # Step 1: Compute three-dimensional scores
     relevance_scores = compute_relevance_scores(query, memories)
 
@@ -177,7 +180,7 @@ def retrieve(
 
     # Warning 记忆降权 ×0.5
     scored = [
-        (mem, score * 0.5 if check_memory_health(mem) == 'warning' else score, detail)
+        (mem, score * 0.5 if health_cache.get(mem.id, 'healthy') == 'warning' else score, detail)
         for mem, score, detail in scored
     ]
 
@@ -197,14 +200,18 @@ def retrieve(
                 if related_id not in seen_ids:
                     related_mem = store.get(related_id)
                     if related_mem:
+                        # 按需计算关联记忆的 health 并加入缓存
+                        if related_id not in health_cache:
+                            health_cache[related_id] = check_memory_health(related_mem)
+                        related_health = health_cache[related_id]
                         # 跳过 blocked 关联记忆
-                        if check_memory_health(related_mem) == 'blocked':
+                        if related_health == 'blocked':
                             seen_ids.add(related_id)
                             continue
                         # Linked memories get decayed score
                         spread_score = score * spread_decay
                         # Warning 关联记忆同样降权
-                        if check_memory_health(related_mem) == 'warning':
+                        if related_health == 'warning':
                             spread_score *= 0.5
                         spread_candidates.append((related_mem, spread_score))
                         seen_ids.add(related_id)
