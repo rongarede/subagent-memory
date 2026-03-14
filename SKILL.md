@@ -100,7 +100,7 @@ python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu dashboard
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python3 -m pytest  # 247 tests, ~5s
+python3 -m pytest  # 339 tests, ~5s
 ```
 
 ## 架构演进
@@ -115,6 +115,8 @@ python3 -m pytest  # 247 tests, ~5s
 | Phase C | trigger_tracker.py 智能触发追踪 | 已完成 |
 | Phase D | 端到端测试（5 场景，12 tests） | 已完成 |
 | Phase E | 全量审计 + 文档同步 | 已完成 |
+| Round 2 | 深度集成（decay+feedback 联动、consolidator+health 联动、CLI dashboard） | 已完成 |
+| Round 3 | 自动化集成（feedback hook、trigger-map 注释、CLI 专项测试 +60、evolver+feedback 联动） | 已完成 |
 
 也可在 CLI 中添加 health-check 和 trigger 子命令：
 

@@ -245,6 +245,13 @@ python3 scripts/cli.py \
 - **consolidator + health 联动**：`consolidator.py` 合并时跳过 `blocked` 状态记忆，保持记忆库健康
 - **CLI dashboard**：一站式健康概览，汇总 blocked/warning/healthy 分布及衰减统计
 
+### Round 3: 自动化集成
+
+- **R3-A: feedback auto-inference hook**：`TaskUpdate` completed 事件自动推断反馈，无需手动触发；无需人工干预，任务成功/失败直接驱动 feedback_loop
+- **R3-B: trigger-map weight/efficiency 注释**：12 个触发地图文件新增权重与效率字段注释，帮助 root 理解触发链路优先级
+- **R3-C: CLI 专项测试**：新增 60 个测试覆盖 14+ 子命令（quick-add/retrieve/list/stats/generate-index/consolidate/feedback/health-check/trigger/dashboard/evolve），大幅提升 CLI 可靠性
+- **R3-D: evolver + feedback 联动**：`evolver.py` 演化时过滤 `blocked` 记忆（不参与邻居演化）；`warning` 状态记忆权重降级；正面反馈记忆优先触发演化，提升演化质量
+
 ### 路径约束（CRITICAL）
 
 `--store` 必须使用**磁盘上的实际目录名**（中文类型名），不得使用英文类型名：
@@ -267,7 +274,7 @@ python3 scripts/cli.py \
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python -m pytest tests/ -v    # 247 tests, all passing
+python -m pytest tests/ -v    # 339 tests, all passing
 ```
 
 ## 工作流示例
