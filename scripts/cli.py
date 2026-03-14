@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import dataclasses
 import os
 import sys
 from datetime import datetime
@@ -104,7 +105,7 @@ def cmd_add(args):
 
     # 当指定 --agent 时，标记记忆所有者
     if getattr(args, 'agent', None):
-        memory.owner = args.agent
+        memory = dataclasses.replace(memory, owner=args.agent)
 
     store.add(memory)
 
@@ -198,21 +199,23 @@ def cmd_evolve(args):
         sys.exit(1)
 
     updated = False
+    replace_kwargs: dict = {}
     if args.context:
-        memory.context = args.context
+        replace_kwargs["context"] = args.context
         updated = True
     if args.tags:
-        memory.tags = [t.strip() for t in args.tags.split(",")]
+        replace_kwargs["tags"] = [t.strip() for t in args.tags.split(",")]
         updated = True
 
     if not updated:
         print("未提供任何更新字段（--context 或 --tags）。")
         return
 
-    store.update(memory)
-    print(f"记忆 {memory.id} 已更新。")
-    print(f"  context: {memory.context}")
-    print(f"  tags:    {', '.join(memory.tags)}")
+    updated_memory = dataclasses.replace(memory, **replace_kwargs)
+    store.update(updated_memory)
+    print(f"记忆 {updated_memory.id} 已更新。")
+    print(f"  context: {updated_memory.context}")
+    print(f"  tags:    {', '.join(updated_memory.tags)}")
 
 
 def cmd_list(args):
@@ -350,18 +353,18 @@ def cmd_feedback(args):
         sys.exit(1)
 
     if getattr(args, 'useful', False):
-        memory.positive_feedback += 1
+        updated_memory = dataclasses.replace(memory, positive_feedback=memory.positive_feedback + 1)
         action = "positive"
     elif getattr(args, 'not_useful', False):
-        memory.negative_feedback += 1
+        updated_memory = dataclasses.replace(memory, negative_feedback=memory.negative_feedback + 1)
         action = "negative"
     else:
         print("错误：必须指定 --useful、--not-useful 或 --auto --event <event>。")
         sys.exit(1)
 
-    store.update(memory)
-    print(f"记忆 {memory.id} 反馈已记录（{action}）。")
-    print(f"  positive: {memory.positive_feedback} | negative: {memory.negative_feedback}")
+    store.update(updated_memory)
+    print(f"记忆 {updated_memory.id} 反馈已记录（{action}）。")
+    print(f"  positive: {updated_memory.positive_feedback} | negative: {updated_memory.negative_feedback}")
 
 
 def cmd_trigger(args):
