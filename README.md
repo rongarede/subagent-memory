@@ -259,6 +259,13 @@ python3 scripts/cli.py \
 - **R4-C: cross-agent retriever**：跨 store 联合检索，支持 `--cross-agent` 和 `--stores` 参数；多 store 结果合并后统一三维评分排序；CLI 扩展 `retrieve` 子命令支持跨 agent 查询
 - **R4-D: performance benchmarks**：100/500/1000 条记忆规模下全链路基准测试；29 个性能测试覆盖检索/合并/衰减/注入；确认线性扩展特性
 
+### Round 5: 健壮性强化
+
+- **R5-A: conftest fixtures**：`tests/conftest.py` 统一 pytest fixtures（`tmp_store`、`sample_memories`、`mock_llm_client`），消除各测试文件中的重复 setup 代码，提升测试一致性
+- **R5-B: incremental index**：`generate-index --force` 标志支持强制全量重建索引；增量索引仅更新变更记忆，避免大规模 store 的全量扫描开销
+- **R5-C: corrupted recovery**：损坏记忆文件自动检测与恢复；新增 `repair` CLI 子命令，扫描 store 中 YAML frontmatter 格式错误的文件并尝试修复或隔离
+- **R5-D: full workflow tests**：端到端全流程健壮性测试，覆盖 store 初始化异常、并发写入、index 损坏恢复、跨 agent 检索边界条件等场景
+
 ### 路径约束（CRITICAL）
 
 `--store` 必须使用**磁盘上的实际目录名**（中文类型名），不得使用英文类型名：
@@ -281,7 +288,7 @@ python3 scripts/cli.py \
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python -m pytest tests/ -v    # 428 tests, all passing
+python -m pytest tests/ -v    # 491 tests, all passing
 ```
 
 ## 工作流示例

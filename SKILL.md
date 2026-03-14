@@ -78,8 +78,14 @@ python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu \
 # 统计
 python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu stats
 
-# 生成索引
+# 生成索引（增量，默认）
 python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu generate-index
+
+# 生成索引（强制全量重建）
+python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu generate-index --force
+
+# 修复损坏记忆文件
+python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu repair
 
 # 一站式健康概览（blocked/warning/healthy 分布 + 衰减统计）
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu dashboard
@@ -100,7 +106,7 @@ python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu dashboard
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python3 -m pytest  # 428 tests, ~5s
+python3 -m pytest  # 491 tests, ~5s
 ```
 
 ## 架构演进
@@ -118,6 +124,7 @@ python3 -m pytest  # 428 tests, ~5s
 | Round 2 | 深度集成（decay+feedback 联动、consolidator+health 联动、CLI dashboard） | 已完成 |
 | Round 3 | 自动化集成（feedback hook、trigger-map 注释、CLI 专项测试 +60、evolver+feedback 联动） | 已完成 |
 | Round 4 | 智能自动化（auto-consolidate hook、scheduled decay hook、cross-agent retriever、performance benchmarks） | 已完成 |
+| Round 5 | 健壮性强化（conftest fixtures、incremental index、corrupted recovery、full workflow tests） | 已完成 |
 
 也可在 CLI 中添加 health-check 和 trigger 子命令：
 

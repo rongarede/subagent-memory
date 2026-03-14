@@ -141,9 +141,6 @@ class TestNoChangesSkips:
         # 首次运行
         run_generate_index(tmp_path)
 
-        # 记录第一次运行后 MEMORY.md 的修改时间
-        index_mtime_before = (tmp_path / "MEMORY.md").stat().st_mtime
-
         # 等待一点时间确保时间戳区分
         time.sleep(0.05)
 

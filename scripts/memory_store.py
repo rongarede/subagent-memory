@@ -3,7 +3,7 @@
 import os
 import shutil
 import tempfile
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace as dc_replace
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
@@ -335,7 +335,7 @@ class MemoryStore:
                 owner_store = MemoryStore(store_path=str(owner_path))
                 original = owner_store.get(memory.id)
                 if original and self.agent_name not in original.accessed_by:
-                    original.accessed_by.append(self.agent_name)
+                    original = dc_replace(original, accessed_by=[*original.accessed_by, self.agent_name])
                     owner_store.update(original)
                     self.check_promotion(memory.id, owner_store, original)
 
@@ -379,7 +379,7 @@ class MemoryStore:
             shared_store.add(promoted)
 
             # 标记原记忆已晋升
-            mem.scope = "shared"
+            mem = dc_replace(mem, scope="shared")
             store.update(mem)
             return True
 

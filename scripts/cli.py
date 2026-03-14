@@ -820,7 +820,13 @@ def cmd_repair(args):
         print(f"将删除 {len(corrupted)} 个无法修复的损坏文件：")
         for path, _ in corrupted:
             print(f"  {path.name}")
-        confirm = input("\n确认删除？[y/N] ").strip().lower()
+        if getattr(args, 'yes', False):
+            confirm = "y"
+        elif sys.stdin.isatty():
+            confirm = input("\n确认删除？[y/N] ").strip().lower()
+        else:
+            print("非 TTY 环境，跳过删除（请使用 --yes 强制确认）。")
+            return
         if confirm == "y":
             deleted = 0
             for path, _ in corrupted:
@@ -1014,6 +1020,11 @@ def main():
         "--delete",
         action="store_true",
         help="删除无法修复的损坏文件（需用户确认）",
+    )
+    p_repair.add_argument(
+        "--yes",
+        action="store_true",
+        help="跳过删除确认（适用于非 TTY 环境或自动化脚本）",
     )
 
     # ---- trigger ----
