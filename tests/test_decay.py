@@ -394,3 +394,158 @@ class TestCleanupDecayed:
             assert deleted == 0, f"空 store 应返回 0，实际：{deleted}"
         finally:
             shutil.rmtree(tmp_dir)
+
+
+# ==================== decay + feedback 联动测试 ====================
+
+class TestDecayFeedbackIntegration:
+    """测试 decay 与 feedback 的联动"""
+
+    def test_positive_feedback_slows_decay(self):
+        """正面反馈记忆衰减更慢"""
+        now = datetime(2026, 3, 14, 12, 0, 0)
+        last_accessed = (now - timedelta(days=30)).isoformat()
+
+        # mem_a: positive_feedback=10, negative_feedback=0
+        mem_a = make_memory(
+            id="mem_a",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=10,
+            negative_feedback=0,
+        )
+        # mem_b: positive_feedback=0, negative_feedback=0（无反馈）
+        mem_b = make_memory(
+            id="mem_b",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=0,
+            negative_feedback=0,
+        )
+
+        decayed_a = apply_decay(mem_a, now=now)
+        decayed_b = apply_decay(mem_b, now=now)
+
+        assert decayed_a.importance >= decayed_b.importance, (
+            f"正面反馈记忆 importance ({decayed_a.importance}) "
+            f"应 >= 无反馈记忆 ({decayed_b.importance})"
+        )
+
+    def test_negative_feedback_accelerates_decay(self):
+        """负面反馈记忆衰减更快"""
+        now = datetime(2026, 3, 14, 12, 0, 0)
+        last_accessed = (now - timedelta(days=15)).isoformat()
+
+        # mem_a: 全负面反馈
+        mem_a = make_memory(
+            id="mem_a",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=0,
+            negative_feedback=10,
+        )
+        # mem_b: 无反馈
+        mem_b = make_memory(
+            id="mem_b",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=0,
+            negative_feedback=0,
+        )
+
+        decayed_a = apply_decay(mem_a, now=now)
+        decayed_b = apply_decay(mem_b, now=now)
+
+        assert decayed_a.importance <= decayed_b.importance, (
+            f"负面反馈记忆 importance ({decayed_a.importance}) "
+            f"应 <= 无反馈记忆 ({decayed_b.importance})"
+        )
+
+    def test_balanced_feedback_no_change(self):
+        """正负反馈平衡时衰减与无反馈相近"""
+        now = datetime(2026, 3, 14, 12, 0, 0)
+        last_accessed = (now - timedelta(days=20)).isoformat()
+
+        # mem_balanced: positive=5, negative=5 → ratio=0.5
+        mem_balanced = make_memory(
+            id="mem_balanced",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=5,
+            negative_feedback=5,
+        )
+        # mem_none: 无反馈 → ratio=0.5
+        mem_none = make_memory(
+            id="mem_none",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=0,
+            negative_feedback=0,
+        )
+
+        decayed_balanced = apply_decay(mem_balanced, now=now)
+        decayed_none = apply_decay(mem_none, now=now)
+
+        assert decayed_balanced.importance == decayed_none.importance, (
+            f"平衡反馈记忆 importance ({decayed_balanced.importance}) "
+            f"应与无反馈记忆完全一致 ({decayed_none.importance})"
+        )
+
+    def test_feedback_factor_has_bounds(self):
+        """feedback 因子有上下限，不会无限放大或缩小"""
+        now = datetime(2026, 3, 14, 12, 0, 0)
+        last_accessed = (now - timedelta(days=1)).isoformat()
+
+        # 极端正面：factor 最大 2.0
+        mem_extreme_pos = make_memory(
+            id="mem_extreme_pos",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=100,
+            negative_feedback=0,
+        )
+        # 极端负面：factor 最小 0.5
+        mem_extreme_neg = make_memory(
+            id="mem_extreme_neg",
+            importance=5,
+            last_accessed=last_accessed,
+            positive_feedback=0,
+            negative_feedback=100,
+        )
+
+        # 直接测试 _feedback_factor
+        from decay_engine import _feedback_factor
+
+        factor_pos = _feedback_factor(mem_extreme_pos)
+        factor_neg = _feedback_factor(mem_extreme_neg)
+
+        assert factor_pos <= 2.0, f"极端正面 factor 应 <= 2.0，实际：{factor_pos}"
+        assert factor_neg >= 0.5, f"极端负面 factor 应 >= 0.5，实际：{factor_neg}"
+
+    def test_no_feedback_backward_compatible(self):
+        """无反馈记忆行为不变（向后兼容）"""
+        now = datetime(2026, 3, 14, 12, 0, 0)
+        last_accessed = (now - timedelta(days=30)).isoformat()
+
+        # 使用 Memory 对象（有 positive/negative_feedback=0）
+        mem_with_fields = make_memory(
+            id="mem_with_fields",
+            importance=10,
+            last_accessed=last_accessed,
+            positive_feedback=0,
+            negative_feedback=0,
+        )
+
+        # compute_retention 旧接口（仅传 last_accessed + base_importance）
+        expected_retention = compute_retention(
+            last_accessed=last_accessed,
+            base_importance=10,
+            now=now,
+        )
+        expected_importance = max(1, int(max(10 * 0.2, 10 * expected_retention)))
+
+        decayed = apply_decay(mem_with_fields, now=now)
+
+        assert decayed.importance == expected_importance, (
+            f"无反馈时衰减结果应与旧实现一致：期望 {expected_importance}，实际 {decayed.importance}"
+        )

@@ -19,6 +19,41 @@ from typing import Optional
 from memory_store import Memory, MemoryStore
 
 
+def _feedback_factor(memory: Memory) -> float:
+    """计算反馈对衰减速率的影响因子（0.5 ~ 2.0）。
+
+    通过 feedback_loop.get_feedback_ratio 获取 ratio，线性映射到因子：
+      - ratio = 0.5（无反馈或平衡） → factor = 1.0（不变）
+      - ratio > 0.5（正面偏多）    → factor > 1.0（衰减减慢，上限 2.0）
+      - ratio < 0.5（负面偏多）    → factor < 1.0（衰减加速，下限 0.5）
+
+    线性映射公式：
+      ratio in [0.5, 1.0] → factor = 1.0 + (ratio - 0.5) * 2.0  ∈ [1.0, 2.0]
+      ratio in [0.0, 0.5) → factor = 0.5 + ratio                 ∈ [0.5, 1.0)
+
+    Args:
+        memory: Memory 对象（读取 positive_feedback 和 negative_feedback）
+
+    Returns:
+        float，范围 [0.5, 2.0]
+    """
+    from feedback_loop import get_feedback_ratio
+    ratio = get_feedback_ratio(memory)
+
+    if ratio == 0.5:
+        # 无反馈（total=0）或正负平衡 → 不影响衰减
+        return 1.0
+
+    if ratio > 0.5:
+        # 正面偏多：1.0 → 2.0
+        factor = 1.0 + (ratio - 0.5) * 2.0
+        return min(2.0, factor)
+    else:
+        # 负面偏多：0.5 → 1.0（不含）
+        factor = 0.5 + ratio
+        return max(0.5, factor)
+
+
 def compute_retention(
     last_accessed: Optional[str],
     base_importance: float,
@@ -61,6 +96,11 @@ def apply_decay(memory: Memory, now: Optional[datetime] = None) -> Memory:
     decayed_importance = max(base * floor_ratio, base * R)
     floor_ratio = 0.2，且 floor 最低为 1（int 取整后）
 
+    feedback 因子：S = base_importance * 3 * _feedback_factor(memory)
+    正面反馈 → factor > 1.0 → S 更大 → 衰减更慢
+    负面反馈 → factor < 1.0 → S 更小 → 衰减更快
+    无反馈   → factor = 1.0 → 与原实现完全一致（向后兼容）
+
     若 memory.last_accessed 为 None，则使用 memory.timestamp 作为参考点。
 
     Args:
@@ -78,12 +118,26 @@ def apply_decay(memory: Memory, now: Optional[datetime] = None) -> Memory:
     else:
         ref_time = memory.timestamp
 
-    # 计算 retention（ref_time 此时肯定非 None）
-    retention = compute_retention(
-        last_accessed=ref_time,
-        base_importance=base,
-        now=now,
-    )
+    if now is None:
+        now = datetime.now()
+
+    # 计算 feedback 因子（影响 S = stability）
+    factor = _feedback_factor(memory)
+
+    # 解析参考时间
+    try:
+        last_dt = datetime.fromisoformat(ref_time)
+    except (ValueError, TypeError):
+        last_dt = None
+
+    if last_dt is None:
+        retention = 1.0
+    else:
+        # t = 距上次访问的天数
+        t = max(0.0, (now - last_dt).total_seconds() / 86400.0)
+        # S = stability 天数，乘以 feedback 因子
+        stability = max(1e-9, float(base) * 3.0 * factor)
+        retention = math.exp(-t / stability)
 
     # 计算衰减后 importance
     floor_val = max(1, int(base * 0.2))
