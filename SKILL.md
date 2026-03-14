@@ -57,15 +57,23 @@ SCRIPT=~/.claude/skills/agent-memory/scripts/cli.py
 
 # 快速添加记忆
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu \
-  quick-add --name "任务名" --description "描述" --type task "正文内容"
+  quick-add --name "任务名" --description "描述" --type task --context "执行上下文" "正文内容"
 
 # 检索记忆
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu \
   retrieve --query "搜索关键词" --top-k 5
 
-# 反馈（手动）
+# 快速添加（明确字段）
+python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu \
+  add --subject "任务主题" --description "详细描述" --keywords "kw1,kw2" --importance 7
+
+# 反馈（手动正向）
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu \
-  feedback --memory-id "mem_id" --positive
+  feedback --memory-id "mem_id" --useful
+
+# 反馈（手动负向）
+python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu \
+  feedback --memory-id "mem_id" --not-useful
 
 # 反馈（自动推断）
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu \
@@ -74,6 +82,9 @@ python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu \
 # 记忆去重合并
 python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu \
   consolidate --threshold 0.85 --dry-run
+
+# 列出记忆
+python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu list --limit 10
 
 # 统计
 python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu stats
@@ -84,11 +95,11 @@ python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu generate-index
 # 生成索引（强制全量重建）
 python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu generate-index --force
 
-# 修复损坏记忆文件
-python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu repair
+# 修复损坏记忆文件（--fix 自动修复, --delete 删除无法修复项, --yes 跳过确认）
+python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu repair --fix --delete --yes
 
-# 一站式健康概览（blocked/warning/healthy 分布 + 衰减统计）
-python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu dashboard
+# 一站式健康概览（blocked/warning/healthy 分布 + 衰减统计，--trigger-stats 附加触发效率）
+python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu dashboard --trigger-stats
 ```
 
 ## 路径约束
@@ -129,14 +140,17 @@ python3 -m pytest  # 491 tests, ~5s
 也可在 CLI 中添加 health-check 和 trigger 子命令：
 
 ```bash
-# 健康检查
-python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu health-check
+# 健康检查（--show-all 显示全部记忆，含 healthy 状态）
+python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu health-check --show-all
 
 # 触发追踪
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu trigger stats
-python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu trigger reset
+
+# 记忆演化
+python3 $SCRIPT --store ~/mem/mem/agents/蚁工/tetsu \
+  evolve mem_xxxxx --context "新语境" --tags "tag1,tag2"
 
 # 跨 agent 联合检索（Round 4 新增）
 python3 $SCRIPT retrieve --cross-agent --query "搜索关键词" --top-k 5
-python3 $SCRIPT retrieve --stores ~/mem/mem/agents/蚁工/tetsu ~/mem/mem/agents/Auditor/shin --query "搜索关键词"
+python3 $SCRIPT retrieve --stores "~/mem/mem/agents/蚁工/tetsu,~/mem/mem/agents/Auditor/shin" --query "搜索关键词"
 ```
