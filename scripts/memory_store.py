@@ -175,8 +175,25 @@ class MemoryStore:
         target.write_text(self._memory_to_frontmatter(memory), encoding='utf-8')
         return memory
 
+    @property
+    def _corrupted_log_path(self) -> Path:
+        """损坏记忆日志文件路径（store 目录下的隐藏文件）。"""
+        return self.store_path / ".corrupted_memories.log"
+
+    def _log_corrupted(self, file_path: Path, error: Exception) -> None:
+        """向损坏日志追加一条记录。格式：{timestamp} | {file_path} | {error_message}"""
+        timestamp = datetime.now().isoformat(timespec="seconds")
+        line = f"{timestamp} | {file_path} | {error}\n"
+        with open(self._corrupted_log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+
     def load_all(self) -> list[Memory]:
-        """Load all memories from *.md files under the store directory."""
+        """Load all memories from *.md files under the store directory.
+
+        容错机制：YAML frontmatter 解析失败的文件跳过（不 crash），
+        错误记录到 .corrupted_memories.log（追加模式）。
+        日志格式：{timestamp} | {file_path} | {error_message}
+        """
         if not self.store_path.exists():
             return []
 
@@ -185,8 +202,9 @@ class MemoryStore:
             text = path.read_text(encoding='utf-8')
             try:
                 memories.append(self._frontmatter_to_memory(text))
-            except Exception:
-                # 跳过损坏文件，保持读取健壮性
+            except Exception as e:
+                # 跳过损坏文件，记录到日志，保持读取健壮性
+                self._log_corrupted(path, e)
                 continue
         return memories
 

@@ -375,11 +375,112 @@ def _generate_index(store: MemoryStore) -> Path:
     return output
 
 
+def _generate_index_incremental(store_path: Path, force: bool = False) -> dict:
+    """增量生成 MEMORY.md 索引。
+
+    通过比较文件 mtime 与 .index-meta.json 中记录的值，
+    只重新解析有变化的文件。返回统计 dict: {processed, skipped, removed}。
+
+    参数：
+        store_path: 记忆存储目录 Path
+        force: 若为 True，强制全量重建（忽略 meta）
+    """
+    import json as _json
+
+    meta_path = store_path / ".index-meta.json"
+    type_order = ["user", "feedback", "task", "knowledge", "project", "reference"]
+
+    # ---- 加载旧 meta（损坏时回退全量）----
+    old_meta: dict[str, float] = {}
+    if not force and meta_path.exists():
+        try:
+            raw = meta_path.read_text(encoding="utf-8").strip()
+            if not raw:
+                raise ValueError("empty meta file")
+            old_meta = _json.loads(raw)
+            if not isinstance(old_meta, dict):
+                raise ValueError("meta is not a dict")
+        except (ValueError, _json.JSONDecodeError):
+            # 损坏：强制全量
+            old_meta = {}
+            force = True
+
+    # ---- 扫描当前 mem_*.md 文件 ----
+    current_files: dict[str, float] = {}
+    for f in sorted(store_path.glob("mem_*.md")):
+        current_files[f.name] = f.stat().st_mtime
+
+    # ---- 判断哪些文件需要处理 ----
+    to_process: list[str] = []
+    skipped: list[str] = []
+    removed_count = 0
+
+    for filename in current_files:
+        if force or filename not in old_meta or current_files[filename] != old_meta[filename]:
+            to_process.append(filename)
+        else:
+            skipped.append(filename)
+
+    # ---- 检测删除的文件 ----
+    deleted_files = set(old_meta.keys()) - set(current_files.keys())
+    removed_count = len(deleted_files)
+
+    # ---- 若无变化且索引已存在，直接返回 ----
+    if not to_process and not deleted_files and (store_path / "MEMORY.md").exists():
+        return {"processed": 0, "skipped": len(skipped), "removed": 0}
+
+    # ---- 加载所有记忆（增量：只重新解析需要处理的文件）----
+    # 策略：始终读取全部记忆以生成完整索引，
+    # 但统计数字反映增量处理情况
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from memory_store import MemoryStore, Memory
+
+    store = MemoryStore(store_path=str(store_path))
+    memories = store.load_all()
+
+    # ---- 生成 MEMORY.md ----
+    grouped: dict[str, list[Memory]] = {t: [] for t in type_order}
+    for mem in memories:
+        mt = (mem.type or "task").strip().lower() or "task"
+        if mt not in grouped:
+            grouped[mt] = []
+        grouped[mt].append(mem)
+
+    lines: list[str] = ["# Memory Index", ""]
+    for mt in type_order:
+        items = grouped.get(mt, [])
+        if not items:
+            continue
+        lines.append(f"## {mt.capitalize()}")
+        for mem in sorted(items, key=lambda m: m.id):
+            title = (mem.name or "").strip() or mem.id
+            desc = (mem.description or "").strip() or (mem.context or "").strip() or mem.content.strip()
+            desc = desc.replace("\n", " ")
+            lines.append(f"- [{title}]({mem.id}.md) — {desc}")
+        lines.append("")
+
+    output = store_path / "MEMORY.md"
+    output.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+    # ---- 更新 meta：只保留当前存在的文件 ----
+    new_meta = {filename: mtime for filename, mtime in current_files.items()}
+    meta_path.write_text(_json.dumps(new_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    return {
+        "processed": len(to_process),
+        "skipped": len(skipped),
+        "removed": removed_count,
+    }
+
+
 def cmd_generate_index(args):
-    """Generate MEMORY.md index in store directory."""
+    """Generate MEMORY.md index in store directory (incremental by default)."""
     store = get_store(args)
-    output = _generate_index(store)
+    force = getattr(args, 'force', False)
+    result = _generate_index_incremental(store.store_path, force=force)
+    output = store.store_path / "MEMORY.md"
     print(f"索引已生成: {output}")
+    print(f"  处理: {result['processed']} 个文件, 跳过: {result['skipped']} 个, 移除: {result['removed']} 个")
 
 
 def cmd_feedback(args):
@@ -597,6 +698,147 @@ def cmd_dashboard(args):
     print("=" * 50)
 
 
+def _try_fix_frontmatter(text: str):
+    """尝试修复常见的 frontmatter 损坏问题。
+
+    支持的修复：
+    1. 缺少结束 '---' 分隔符（frontmatter 未闭合）
+
+    返回修复后的文本，若无法修复则返回 None。
+    """
+    import yaml as _yaml
+
+    # 修复 1：有开头 ---\n 但没有结束 ---
+    if text.startswith("---\n") and "\n---\n" not in text:
+        lines = text.split("\n")
+        for i, line in enumerate(lines[1:], 1):  # 跳过第一行 ---
+            # 空行可能是 frontmatter 和 body 的分隔
+            if line.strip() == "" and i > 1:
+                fm_candidate = "\n".join(lines[1:i])
+                try:
+                    parsed = _yaml.safe_load(fm_candidate)
+                    if isinstance(parsed, dict):
+                        body = "\n".join(lines[i + 1:])
+                        return f"---\n{fm_candidate}\n---\n\n{body}"
+                except Exception:
+                    pass
+        return None
+
+    return None
+
+
+def cmd_repair(args):
+    """扫描 store 中所有 .md 记忆文件，检查 YAML 可解析性，报告损坏文件。
+
+    选项：
+      --fix     尝试自动修复常见问题（如缺少结束 --- 分隔符）
+      --delete  删除无法修复的损坏文件（需用户确认）
+    """
+    store = get_store(args)
+    store_path = store.store_path
+
+    if not store_path.exists():
+        print(f"Store 目录不存在：{store_path}")
+        return
+
+    all_md = [p for p in sorted(store_path.glob("*.md")) if p.name != "MEMORY.md"]
+
+    if not all_md:
+        print(f"Store 为空（0 个记忆文件）：{store_path}")
+        return
+
+    fixable = []   # list of (path, fixed_content, error_msg)
+    corrupted = [] # list of (path, error_msg) — 无法自动修复
+    valid_count = 0
+
+    for path in all_md:
+        text = path.read_text(encoding="utf-8")
+        try:
+            store._frontmatter_to_memory(text)
+            valid_count += 1
+        except Exception as e:
+            error_msg = str(e)
+            fixed = _try_fix_frontmatter(text)
+            if fixed is not None:
+                # 验证修复后能解析
+                try:
+                    store._frontmatter_to_memory(fixed)
+                    fixable.append((path, fixed, error_msg))
+                except Exception:
+                    corrupted.append((path, error_msg))
+            else:
+                corrupted.append((path, error_msg))
+
+    total = len(all_md)
+    corrupted_count = len(corrupted) + len(fixable)
+
+    if corrupted_count == 0:
+        print(f"检查完成：{total} 个文件，0 个损坏。Store 状态良好。")
+        return
+
+    # 报告损坏文件
+    print(f"检查完成：{total} 个文件，{valid_count} 个有效，{corrupted_count} 个损坏。\n")
+
+    if fixable:
+        print(f"可自动修复（{len(fixable)} 个）：")
+        for path, _, err in fixable:
+            print(f"  [可修复] {path.name}")
+            print(f"           原因：{err}")
+        print()
+
+    if corrupted:
+        print(f"无法自动修复（{len(corrupted)} 个）：")
+        for path, err in corrupted:
+            print(f"  [损坏]   {path.name}")
+            print(f"           原因：{err}")
+        print()
+
+    # --fix：自动修复可修复文件
+    if getattr(args, 'fix', False):
+        if fixable:
+            fixed_count = 0
+            for path, fixed_content, _ in fixable:
+                try:
+                    path.write_text(fixed_content, encoding="utf-8")
+                    print(f"已修复：{path.name}")
+                    fixed_count += 1
+                except Exception as fix_err:
+                    print(f"修复失败：{path.name} — {fix_err}")
+            print(f"\n修复完成：{fixed_count}/{len(fixable)} 个文件已修复。")
+        else:
+            print("无可自动修复的文件。")
+
+        if corrupted:
+            print(f"\n{len(corrupted)} 个文件无法自动修复，请手动处理或使用 --delete 删除。")
+        return
+
+    # --delete：删除无法修复的文件
+    if getattr(args, 'delete', False):
+        if not corrupted:
+            print("无需删除：无法修复的损坏文件为 0 个。")
+            return
+        print(f"将删除 {len(corrupted)} 个无法修复的损坏文件：")
+        for path, _ in corrupted:
+            print(f"  {path.name}")
+        confirm = input("\n确认删除？[y/N] ").strip().lower()
+        if confirm == "y":
+            deleted = 0
+            for path, _ in corrupted:
+                path.unlink()
+                deleted += 1
+                print(f"已删除：{path.name}")
+            print(f"\n已删除 {deleted} 个损坏文件。")
+        else:
+            print("取消删除。")
+        return
+
+    # 纯报告模式（无选项）
+    if fixable:
+        print(f"提示：使用 --fix 可自动修复 {len(fixable)} 个文件。")
+    if corrupted:
+        print(f"提示：使用 --delete 可删除 {len(corrupted)} 个无法修复的文件。")
+
+
 def cmd_consolidate(args):
     """扫描记忆库，合并相似记忆对。"""
     from consolidator import consolidate
@@ -719,7 +961,12 @@ def main():
     )
 
     # ---- generate-index ----
-    subparsers.add_parser("generate-index", help="按类型生成 MEMORY.md 索引")
+    p_generate_index = subparsers.add_parser("generate-index", help="按类型生成 MEMORY.md 索引（增量）")
+    p_generate_index.add_argument(
+        "--force",
+        action="store_true",
+        help="强制全量重建（忽略 .index-meta.json 缓存）",
+    )
 
     # ---- consolidate ----
     p_consolidate = subparsers.add_parser("consolidate", help="扫描记忆库，合并相似记忆对")
@@ -755,6 +1002,19 @@ def main():
     p_dashboard = subparsers.add_parser("dashboard", help="一站式系统健康概览")
     p_dashboard.add_argument("--trigger-stats", dest="trigger_stats", default=None,
                              help="trigger-stats.json 路径（可选，默认 ~/mem/mem/workflows/trigger-stats.json）")
+
+    # ---- repair ----
+    p_repair = subparsers.add_parser("repair", help="扫描并报告损坏的记忆文件（YAML 解析失败）")
+    p_repair.add_argument(
+        "--fix",
+        action="store_true",
+        help="尝试自动修复常见问题（如缺少结束 --- 分隔符）",
+    )
+    p_repair.add_argument(
+        "--delete",
+        action="store_true",
+        help="删除无法修复的损坏文件（需用户确认）",
+    )
 
     # ---- trigger ----
     p_trigger = subparsers.add_parser("trigger", help="触发效率追踪：record/stats/adjust")
@@ -799,6 +1059,7 @@ def main():
         "health-check": cmd_health_check,
         "trigger": cmd_trigger,
         "dashboard": cmd_dashboard,
+        "repair": cmd_repair,
     }
     commands[args.command](args)
 
