@@ -500,3 +500,190 @@ class TestConsolidate:
 
         finally:
             shutil.rmtree(tmp_dir)
+
+
+# ==================== TestConsolidationHealthIntegration ====================
+
+class TestConsolidationHealthIntegration:
+    """测试合并与健康状态的联动"""
+
+    def test_blocked_memories_excluded_from_consolidation(self):
+        """blocked 记忆不参与合并。
+
+        blocked 条件：negative_feedback >= 5 且 ratio <= 0.2（positive=0）
+        即使两条记忆高度相似，只要有一条是 blocked 就不应出现在合并对中。
+        """
+        tmp_dir, store = new_tmp_store()
+        try:
+            # mem_a: blocked (negative=5, positive=0 → ratio=0.0, neg>=5)
+            mem_blocked = make_memory(
+                id="blocked_mem",
+                content="Python 调试技巧：使用 pdb 设置断点调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=7,
+                positive_feedback=0,
+                negative_feedback=5,
+            )
+            # mem_b: healthy，与 mem_a 高度相似
+            mem_healthy = make_memory(
+                id="healthy_mem",
+                content="Python 调试方法：利用 pdb 断点工具调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=5,
+                positive_feedback=0,
+                negative_feedback=0,
+            )
+            store.add(mem_blocked)
+            store.add(mem_healthy)
+
+            result = consolidate(store, threshold=0.85, dry_run=True)
+
+            # blocked 记忆不参与合并，pairs 中不应包含 blocked_mem
+            pairs = result.get("pairs", [])
+            blocked_in_pairs = any(
+                "blocked_mem" in (p[0], p[1]) for p in pairs
+            )
+            assert not blocked_in_pairs, (
+                f"blocked 记忆不应出现在合并对中，实际 pairs={pairs}"
+            )
+
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_warning_memory_not_primary(self):
+        """warning 记忆不能作为主记忆（合并目标）。
+
+        当两条记忆都是 warning 时，不应发生合并。
+        当 warning + healthy 合并时，healthy 应做主（见 test_mixed_health_consolidation）。
+        """
+        tmp_dir, store = new_tmp_store()
+        try:
+            # mem_a: warning (negative=3, positive=0 → ratio=0.0, neg>=3)
+            mem_warning_a = make_memory(
+                id="warning_a",
+                content="Python 调试技巧：使用 pdb 设置断点调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=7,
+                positive_feedback=0,
+                negative_feedback=3,
+            )
+            # mem_b: warning
+            mem_warning_b = make_memory(
+                id="warning_b",
+                content="Python 调试方法：利用 pdb 断点工具调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=5,
+                positive_feedback=0,
+                negative_feedback=3,
+            )
+            store.add(mem_warning_a)
+            store.add(mem_warning_b)
+
+            # 两条都是 warning，不应合并
+            result = consolidate(store, threshold=0.85, dry_run=False)
+
+            assert result["merged"] == 0, (
+                f"两条 warning 记忆不应被合并，merged={result['merged']}"
+            )
+            assert store.count() == 2, (
+                f"两条 warning 记忆不应被删除，store 应仍有 2 条，实际 {store.count()}"
+            )
+
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_healthy_memories_consolidate_normally(self):
+        """healthy 记忆正常合并（向后兼容）。
+
+        两条 healthy 记忆高度相似 → 应正常触发合并，merged=1。
+        """
+        tmp_dir, store = new_tmp_store()
+        try:
+            mem_a = make_memory(
+                id="healthy_a",
+                content="Python 调试技巧：使用 pdb 设置断点调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=7,
+                positive_feedback=0,
+                negative_feedback=0,
+            )
+            mem_b = make_memory(
+                id="healthy_b",
+                content="Python 调试方法：利用 pdb 断点工具调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=5,
+                positive_feedback=0,
+                negative_feedback=0,
+            )
+            store.add(mem_a)
+            store.add(mem_b)
+
+            result = consolidate(store, threshold=0.85, dry_run=False)
+
+            assert result["merged"] >= 1, (
+                f"两条 healthy 记忆应正常合并，merged={result['merged']}"
+            )
+            assert store.count() == 1, (
+                f"合并后 store 应只剩 1 条记忆，实际 {store.count()}"
+            )
+
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_mixed_health_consolidation(self):
+        """混合健康状态：healthy + warning 可以合并，healthy 为主。
+
+        mem_a (healthy, importance=5) + mem_b (warning, importance=7)
+        → 合并时 mem_a 应做主（healthy 优先），即使 importance 更低。
+        """
+        tmp_dir, store = new_tmp_store()
+        try:
+            # mem_a: healthy（importance 较低）
+            mem_healthy = make_memory(
+                id="mixed_healthy",
+                content="Python 调试技巧：使用 pdb 设置断点调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=5,
+                positive_feedback=0,
+                negative_feedback=0,
+            )
+            # mem_b: warning（importance 较高，但健康状态差）
+            mem_warning = make_memory(
+                id="mixed_warning",
+                content="Python 调试方法：利用 pdb 断点工具调试代码",
+                keywords=["Python", "调试", "pdb", "断点"],
+                tags=["python", "debug"],
+                importance=7,
+                positive_feedback=0,
+                negative_feedback=3,
+            )
+            store.add(mem_healthy)
+            store.add(mem_warning)
+
+            result = consolidate(store, threshold=0.85, dry_run=False)
+
+            # 合并应发生
+            assert result["merged"] >= 1, (
+                f"healthy + warning 应触发合并，merged={result['merged']}"
+            )
+            assert store.count() == 1, (
+                f"合并后 store 应只剩 1 条记忆，实际 {store.count()}"
+            )
+
+            # 保留下来的记忆 id 应该是 healthy 的（mixed_healthy）
+            remaining = store.load_all()
+            assert len(remaining) == 1
+            assert remaining[0].id == "mixed_healthy", (
+                f"合并后应保留 healthy 记忆（mixed_healthy）为主，"
+                f"实际保留 id={remaining[0].id}"
+            )
+
+        finally:
+            shutil.rmtree(tmp_dir)

@@ -14,6 +14,7 @@ from dataclasses import replace
 sys.path.insert(0, os.path.dirname(__file__))
 
 from memory_store import Memory, MemoryStore
+from feedback_loop import check_memory_health
 
 
 # ==================== 相似度计算 ====================
@@ -171,12 +172,34 @@ def consolidate(
             "pairs": 检出相似对的信息列表
     """
     memories = store.load_all()
-    pairs = find_similar_pairs(memories, threshold=threshold)
+
+    # ==================== 健康过滤 ====================
+    # blocked 记忆完全排除合并流程
+    active_memories = [m for m in memories if check_memory_health(m) != "blocked"]
+
+    pairs = find_similar_pairs(active_memories, threshold=threshold)
+
+    # ==================== 健康感知过滤相似对 ====================
+    # 两条都是 warning → 不合并
+    _HEALTH_ORDER = {"healthy": 0, "warning": 1}
+
+    def _health_rank(mem: Memory) -> int:
+        """数值越小表示健康状态越好（healthy=0 优于 warning=1）。"""
+        return _HEALTH_ORDER.get(check_memory_health(mem), 0)
+
+    filtered_pairs = []
+    for mem_a, mem_b, score in pairs:
+        rank_a = _health_rank(mem_a)
+        rank_b = _health_rank(mem_b)
+        # 两条都是 warning → 跳过
+        if rank_a == 1 and rank_b == 1:
+            continue
+        filtered_pairs.append((mem_a, mem_b, score))
 
     # 构建返回的 pairs 信息（每项包含两个记忆的 id + 相似度分数）
-    pairs_info = [(m1.id, m2.id, score) for m1, m2, score in pairs]
+    pairs_info = [(m1.id, m2.id, score) for m1, m2, score in filtered_pairs]
 
-    if dry_run or not pairs:
+    if dry_run or not filtered_pairs:
         return {
             "merged": 0,
             "deleted": 0,
@@ -188,13 +211,23 @@ def consolidate(
     deleted_count = 0
     deleted_ids: set = set()
 
-    for mem_a, mem_b, _score in pairs:
+    for mem_a, mem_b, _score in filtered_pairs:
         # 跳过已被删除的记忆
         if mem_a.id in deleted_ids or mem_b.id in deleted_ids:
             continue
 
-        # 决定 primary（importance 较高方）和 duplicate
-        if mem_a.importance >= mem_b.importance:
+        # 决定 primary 和 duplicate：
+        # 优先级：健康状态（healthy 优先 warning）> importance（大者优先）
+        rank_a = _health_rank(mem_a)
+        rank_b = _health_rank(mem_b)
+        if rank_a < rank_b:
+            # mem_a 更健康 → mem_a 做 primary
+            primary, duplicate = mem_a, mem_b
+        elif rank_b < rank_a:
+            # mem_b 更健康 → mem_b 做 primary
+            primary, duplicate = mem_b, mem_a
+        elif mem_a.importance >= mem_b.importance:
+            # 健康状态相同，importance 较高方做 primary
             primary, duplicate = mem_a, mem_b
         else:
             primary, duplicate = mem_b, mem_a
