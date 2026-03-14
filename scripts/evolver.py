@@ -3,8 +3,15 @@
 
 当新记忆创建时，LLM 主动决策是否更新已有邻居记忆的 context/tags/keywords。
 采用 3 步分解调用：判断 → 生成指令 → 执行更新。
+
+Feedback 联动（Phase 3-D）：
+- blocked 记忆跳过演化（不浪费资源）
+- warning 记忆降低演化优先级（排在 healthy 之后）
+- 正面反馈记忆优先演化，演化时额外 +0.1 importance boost（最高 10）
+- 合并时继承两条源记忆中更好的 feedback 元数据
 """
 
+import dataclasses
 import json
 import os
 import sys
@@ -14,6 +21,91 @@ from typing import Optional
 from memory_store import Memory, MemoryStore
 
 MAX_EVOLUTION_HISTORY = 10
+
+# feedback ratio 阈值：超过此值视为正面反馈，演化时给予 importance boost
+_POSITIVE_RATIO_THRESHOLD = 0.7
+# importance boost 幅度（正面反馈记忆演化时）
+_IMPORTANCE_BOOST = 1
+# importance 上限
+_MAX_IMPORTANCE = 10
+
+
+# ==================== Feedback 优先级工具 ====================
+
+def _get_health_and_ratio(memory: Memory) -> tuple:
+    """返回 (health: str, ratio: float) 用于排序。
+
+    health 优先级权重：healthy=2, warning=1, blocked=0（不会进入演化）
+    """
+    from feedback_loop import check_memory_health, get_feedback_ratio
+    health = check_memory_health(memory)
+    ratio = get_feedback_ratio(memory)
+    return health, ratio
+
+
+def _filter_and_prioritize(memories: list) -> list:
+    """过滤 blocked 记忆，按 health + feedback_ratio 排序，返回优先级排序列表。
+
+    规则：
+    1. blocked 记忆被完全过滤（ratio <= 0.2 且 negative >= 5）
+    2. healthy 记忆排在 warning 记忆之前
+    3. 相同 health 状态内，按 feedback_ratio 降序排列
+
+    Args:
+        memories: Memory 列表
+
+    Returns:
+        过滤并排序后的 Memory 列表（blocked 已移除）
+    """
+    from feedback_loop import check_memory_health, get_feedback_ratio
+
+    result = []
+    for mem in memories:
+        health = check_memory_health(mem)
+        if health == "blocked":
+            continue
+        result.append(mem)
+
+    # 按 health 等级（healthy > warning）和 ratio 降序排列
+    health_order = {"healthy": 1, "warning": 0}
+
+    def sort_key(mem):
+        health = check_memory_health(mem)
+        ratio = get_feedback_ratio(mem)
+        return (health_order.get(health, 0), ratio)
+
+    result.sort(key=sort_key, reverse=True)
+    return result
+
+
+def merge_feedback(mem_a: Memory, mem_b: Memory) -> Memory:
+    """合并两条记忆的 feedback 元数据，继承较好的那条的数据。
+
+    "较好"定义：positive_feedback 绝对值更高。
+    若相等，则取 negative_feedback 更低的。
+
+    Args:
+        mem_a: 第一条记忆
+        mem_b: 第二条记忆
+
+    Returns:
+        一个新的 Memory 对象（以 mem_b 为基础），继承最佳 feedback 数据。
+        使用 dataclasses.replace() 确保不可变性。
+    """
+    # 选出 feedback 更好的那条
+    if mem_a.positive_feedback > mem_b.positive_feedback:
+        best = mem_a
+    elif mem_b.positive_feedback > mem_a.positive_feedback:
+        best = mem_b
+    else:
+        # positive 相等，选 negative 更低的
+        best = mem_a if mem_a.negative_feedback <= mem_b.negative_feedback else mem_b
+
+    return dataclasses.replace(
+        mem_b,
+        positive_feedback=best.positive_feedback,
+        negative_feedback=best.negative_feedback,
+    )
 
 
 def get_client():
@@ -146,8 +238,15 @@ def execute_evolution(
 ) -> list:
     """
     Step 3: 执行演化更新 + 记录 evolution_history（纯代码）
+
+    Feedback 联动：
+    - 正面反馈记忆（ratio > _POSITIVE_RATIO_THRESHOLD）演化时额外获得 importance boost
+    - 使用 dataclasses.replace() 确保不可变性
+
     Returns: list of updated memory IDs
     """
+    from feedback_loop import get_feedback_ratio
+
     updated_ids = []
     now = datetime.now().isoformat()
 
@@ -161,31 +260,43 @@ def execute_evolution(
             continue
 
         changes = {}
+        new_context = neighbor.context
+        new_tags = list(neighbor.tags)
+        new_keywords = list(neighbor.keywords)
+        new_importance = neighbor.importance
+        new_history = list(neighbor.evolution_history)
 
         # 更新 context
-        new_context = update.get("new_context")
-        if new_context and new_context != neighbor.context:
-            changes["context"] = {"old": neighbor.context, "new": new_context}
-            neighbor.context = new_context
+        ctx = update.get("new_context")
+        if ctx and ctx != neighbor.context:
+            changes["context"] = {"old": neighbor.context, "new": ctx}
+            new_context = ctx
 
         # 新增 tags
         add_tags = update.get("add_tags", [])
         if add_tags:
-            new_tags = [t for t in add_tags if t not in neighbor.tags]
-            if new_tags:
-                changes["tags"] = {"added": new_tags}
-                neighbor.tags = list(set(neighbor.tags + new_tags))
+            extra_tags = [t for t in add_tags if t not in neighbor.tags]
+            if extra_tags:
+                changes["tags"] = {"added": extra_tags}
+                new_tags = list(set(new_tags + extra_tags))
 
         # 新增 keywords
         add_keywords = update.get("add_keywords", [])
         if add_keywords:
-            new_kw = [k for k in add_keywords if k not in neighbor.keywords]
-            if new_kw:
-                changes["keywords"] = {"added": new_kw}
-                neighbor.keywords = list(set(neighbor.keywords + new_kw))
+            extra_kw = [k for k in add_keywords if k not in neighbor.keywords]
+            if extra_kw:
+                changes["keywords"] = {"added": extra_kw}
+                new_keywords = list(set(new_keywords + extra_kw))
 
         if not changes:
             continue
+
+        # 正面反馈 importance boost（不可变方式计算新值）
+        ratio = get_feedback_ratio(neighbor)
+        if ratio > _POSITIVE_RATIO_THRESHOLD:
+            new_importance = min(_MAX_IMPORTANCE, neighbor.importance + _IMPORTANCE_BOOST)
+            if new_importance != neighbor.importance:
+                changes["importance"] = {"old": neighbor.importance, "new": new_importance}
 
         # 追加演化历史
         history_entry = {
@@ -193,13 +304,22 @@ def execute_evolution(
             "triggered_by": triggered_by_id,
             "changes": changes,
         }
-        neighbor.evolution_history.append(history_entry)
+        new_history.append(history_entry)
 
         # 截断历史到 MAX_EVOLUTION_HISTORY
-        if len(neighbor.evolution_history) > MAX_EVOLUTION_HISTORY:
-            neighbor.evolution_history = neighbor.evolution_history[-MAX_EVOLUTION_HISTORY:]
+        if len(new_history) > MAX_EVOLUTION_HISTORY:
+            new_history = new_history[-MAX_EVOLUTION_HISTORY:]
 
-        store.update(neighbor)
+        # 使用 dataclasses.replace() 确保不可变性
+        updated_neighbor = dataclasses.replace(
+            neighbor,
+            context=new_context,
+            tags=new_tags,
+            keywords=new_keywords,
+            importance=new_importance,
+            evolution_history=new_history,
+        )
+        store.update(updated_neighbor)
         updated_ids.append(neighbor_id)
 
     return updated_ids
@@ -256,6 +376,12 @@ def evolve_neighbors(
                     mem = agent_store.get(nid)
                     if mem:
                         neighbors.append(mem)
+
+    if not neighbors:
+        return []
+
+    # Feedback 过滤 + 优先级排序：blocked 跳过，warning 降级，正面优先
+    neighbors = _filter_and_prioritize(neighbors)
 
     if not neighbors:
         return []
