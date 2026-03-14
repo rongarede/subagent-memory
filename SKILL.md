@@ -100,7 +100,7 @@ python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu dashboard
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python3 -m pytest  # 339 tests, ~5s
+python3 -m pytest  # 428 tests, ~5s
 ```
 
 ## 架构演进
@@ -117,6 +117,7 @@ python3 -m pytest  # 339 tests, ~5s
 | Phase E | 全量审计 + 文档同步 | 已完成 |
 | Round 2 | 深度集成（decay+feedback 联动、consolidator+health 联动、CLI dashboard） | 已完成 |
 | Round 3 | 自动化集成（feedback hook、trigger-map 注释、CLI 专项测试 +60、evolver+feedback 联动） | 已完成 |
+| Round 4 | 智能自动化（auto-consolidate hook、scheduled decay hook、cross-agent retriever、performance benchmarks） | 已完成 |
 
 也可在 CLI 中添加 health-check 和 trigger 子命令：
 
@@ -127,4 +128,8 @@ python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu health-check
 # 触发追踪
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu trigger stats
 python3 $SCRIPT --agent tetsu --store ~/mem/mem/agents/蚁工/tetsu trigger reset
+
+# 跨 agent 联合检索（Round 4 新增）
+python3 $SCRIPT retrieve --cross-agent --query "搜索关键词" --top-k 5
+python3 $SCRIPT retrieve --stores ~/mem/mem/agents/蚁工/tetsu ~/mem/mem/agents/Auditor/shin --query "搜索关键词"
 ```

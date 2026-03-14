@@ -252,6 +252,13 @@ python3 scripts/cli.py \
 - **R3-C: CLI 专项测试**：新增 60 个测试覆盖 14+ 子命令（quick-add/retrieve/list/stats/generate-index/consolidate/feedback/health-check/trigger/dashboard/evolve），大幅提升 CLI 可靠性
 - **R3-D: evolver + feedback 联动**：`evolver.py` 演化时过滤 `blocked` 记忆（不参与邻居演化）；`warning` 状态记忆权重降级；正面反馈记忆优先触发演化，提升演化质量
 
+### Round 4: 智能自动化
+
+- **R4-A: auto-consolidate hook**：store 记忆数超过 50 时自动触发合并，保持记忆库规模可控；合并前自动备份，防止误合并数据丢失
+- **R4-B: scheduled decay hook**：`SessionStart` 事件触发 24h 自动衰减；跳过 24h 内已衰减的 store（避免重复计算），持久化衰减系数到 frontmatter
+- **R4-C: cross-agent retriever**：跨 store 联合检索，支持 `--cross-agent` 和 `--stores` 参数；多 store 结果合并后统一三维评分排序；CLI 扩展 `retrieve` 子命令支持跨 agent 查询
+- **R4-D: performance benchmarks**：100/500/1000 条记忆规模下全链路基准测试；29 个性能测试覆盖检索/合并/衰减/注入；确认线性扩展特性
+
 ### 路径约束（CRITICAL）
 
 `--store` 必须使用**磁盘上的实际目录名**（中文类型名），不得使用英文类型名：
@@ -274,7 +281,7 @@ python3 scripts/cli.py \
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python -m pytest tests/ -v    # 339 tests, all passing
+python -m pytest tests/ -v    # 428 tests, all passing
 ```
 
 ## 工作流示例
