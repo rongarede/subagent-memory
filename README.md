@@ -155,14 +155,19 @@ scope: personal
 
 | 模块 | 文件 | 功能 |
 |------|------|------|
-| 存储 | `scripts/memory_store.py` | .md 文件持久化 + YAML frontmatter |
-| 检索 | `scripts/retriever.py` | BM25 + 三维评分检索 |
-| 提取 | `scripts/extractor.py` | Claude API 字段提取 |
-| 注入 | `scripts/inject.py` | prompt 注入 + 被动演化 |
-| 关联 | `scripts/associator.py` | 双向关联管理 |
-| 导出 | `scripts/obsidian_export.py` | Obsidian 笔记导出 |
-| CLI | `scripts/cli.py` | 命令行入口 |
-| 注册 | `scripts/registry.py` | agent 注册管理 |
+| 存储 | `scripts/memory_store.py` | Memory dataclass + MemoryStore 存储层 |
+| 检索 | `scripts/retriever.py` | BM25 + 扩散激活 + 三维评分检索 |
+| 关联 | `scripts/associator.py` | 记忆关联（共现分析 + 语义相似） |
+| 提取 | `scripts/extractor.py` | 从任务描述提取结构化记忆 |
+| 注入 | `scripts/inject.py` | 向 agent prompt 注入相关记忆 |
+| 演化 | `scripts/evolver.py` | 记忆邻居演化（LLM 驱动） |
+| 去重 | `scripts/consolidator.py` | 记忆去重合并（Jaccard 相似度 ≥ 0.85） |
+| 衰减 | `scripts/decay_engine.py` | Ebbinghaus 遗忘曲线衰减（R=e^(-t/S)） |
+| 学习 | `scripts/feedback_loop.py` | 反馈学习：自动推断 + 渐进式升级（health 过滤：blocked 排除，warning ×0.5） |
+| 触发 | `scripts/trigger_tracker.py` | 触发效率追踪器：记录/分析/自动调整触发阈值 |
+| 导出 | `scripts/obsidian_export.py` | 导出为 Obsidian 笔记/MOC/Mermaid 图 |
+| 注册 | `scripts/registry.py` | Agent 角色注册表管理 |
+| CLI | `scripts/cli.py` | 命令行入口（retrieve/add/feedback/consolidate/health-check/trigger 等） |
 
 ### CLI 使用
 
@@ -192,7 +197,40 @@ python3 scripts/cli.py generate-index --store ~/mem/mem/agents/Auditor/shin
 
 # 统计
 python3 scripts/cli.py stats --store ~/mem/mem/agents/蚁工/tetsu
+
+# 记忆去重合并（--dry-run 只预览，不实际合并）
+python3 scripts/cli.py consolidate --store ~/mem/mem/agents/蚁工/tetsu --threshold 0.85 --dry-run
+
+# 反馈（自动推断，event 可为 task_success/task_failure/audit_pass/audit_fail）
+python3 scripts/cli.py \
+  --agent tetsu \
+  --store ~/mem/mem/agents/蚁工/tetsu \
+  feedback --memory-id "mem_id" --auto --event task_success
+
+# 健康检查（显示 blocked/warning/healthy 分布）
+python3 scripts/cli.py \
+  --agent tetsu \
+  --store ~/mem/mem/agents/蚁工/tetsu \
+  health-check
+
+# 触发追踪（查看/重置触发效率统计）
+python3 scripts/cli.py \
+  --agent tetsu \
+  --store ~/mem/mem/agents/蚁工/tetsu \
+  trigger stats
 ```
+
+### Phase 2: Memory Consolidation + Decay
+
+- **记忆去重合并**：Jaccard 相似度检测，自动合并高度相似记忆（keywords/tags 并集、importance 取最大值）
+- **遗忘曲线衰减**：Ebbinghaus 指数衰减 R=e^(-t/S)，读时计算不写磁盘，floor=base×0.2 防止完全消失
+
+### Phase 3: Feedback Learning Loop
+
+- **自动推断反馈**：任务成功/失败、审计通过/失败自动评分
+- **手动覆盖**：用户反馈权重 ×3，可纠正自动推断
+- **渐进式升级**：降权(1次) → 告警(3次) → 阻断(5次)，防止反复踩坑
+- **健康检查**：记忆分 healthy/warning/blocked 三级，检索时自动过滤
 
 ### 路径约束（CRITICAL）
 
@@ -216,7 +254,7 @@ python3 scripts/cli.py stats --store ~/mem/mem/agents/蚁工/tetsu
 
 ```bash
 cd ~/.claude/skills/agent-memory
-python -m pytest tests/ -v    # 93 tests, all passing
+python -m pytest tests/ -v    # 234 tests, all passing
 ```
 
 ## 工作流示例
