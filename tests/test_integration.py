@@ -6,6 +6,8 @@
 3. test_passive_evolution_and_access_tracking — 访问追踪与被动进化
 4. test_cli_full_command_set        — CLI 全命令集验证
 5. test_chinese_content_full_chain  — 纯中文内容全链路验证
+6. test_memory_consolidation_e2e    — Phase 2.1 记忆去重合并端到端
+7. test_memory_decay_e2e            — Phase 2.2 记忆时间衰减端到端
 """
 
 import os
@@ -28,6 +30,8 @@ from associator import link_memory
 from inject import enrich_agent_prompt, evolve_memory
 from obsidian_export import export_all, export_memory_note, export_moc, export_mermaid_graph
 from extractor import create_memory_from_task
+from consolidator import consolidate
+from decay_engine import apply_decay, cleanup_decayed
 
 # CLI 脚本绝对路径
 CLI_PATH = os.path.expanduser('~/.claude/skills/agent-memory/scripts/cli.py')
@@ -578,6 +582,202 @@ class TestChineseContentFullChain:
             _cleanup_dir(out_dir)
 
 
+# ==================== 场景 6 ====================
+
+class TestMemoryConsolidationE2E:
+    """
+    场景 6: Phase 2.1 Memory Consolidation 端到端
+           添加 3 条记忆（2 条高度相似 + 1 条无关）
+           → 调用 consolidate → 验证 store 剩余 2 条
+           → 验证合并后记忆包含两者 keywords 并集
+    """
+
+    def test_memory_consolidation_e2e(self):
+        store_path, store = _new_tmp_store()
+
+        try:
+            # 记忆 A + B 高度相似：共享大量 keywords/tags
+            mem_a = Memory(
+                id="mem_20260314_001",
+                content="修复 BM25 检索引擎的中文分词问题，通过 bigram 展开实现字符级匹配",
+                timestamp="2026-03-14T08:00:00",
+                keywords=["BM25", "检索引擎", "中文分词", "bigram", "字符级"],
+                tags=["bug-fix", "retrieval", "bm25"],
+                context="BM25 中文分词 bigram 展开修复",
+                importance=8,
+            )
+            mem_b = Memory(
+                id="mem_20260314_002",
+                content="BM25 检索优化：增加 bigram 中文分词，显著提升中文关键词召回率",
+                timestamp="2026-03-14T09:00:00",
+                keywords=["BM25", "检索引擎", "中文分词", "bigram", "召回率"],
+                tags=["enhancement", "retrieval", "bm25"],
+                context="BM25 检索 bigram 分词优化提升召回",
+                importance=7,
+            )
+            # 记忆 C 与 A/B 完全无关
+            mem_c = Memory(
+                id="mem_20260314_003",
+                content="配置 Obsidian Daily Note 模板，添加每日任务区块和进度追踪",
+                timestamp="2026-03-14T10:00:00",
+                keywords=["Obsidian", "Daily Note", "模板", "任务追踪"],
+                tags=["obsidian", "productivity", "template"],
+                context="Obsidian Daily Note 模板配置",
+                importance=5,
+            )
+
+            store.add(mem_a)
+            store.add(mem_b)
+            store.add(mem_c)
+
+            # 验证初始状态：3 条记忆
+            assert len(store.load_all()) == 3, "初始应有 3 条记忆"
+
+            # 调用 consolidate（使用较低阈值以匹配测试数据的相似度）
+            result = consolidate(store, threshold=0.5)
+
+            # 验证合并发生
+            assert result["merged"] >= 1, \
+                f"应发生至少 1 次合并，实际 {result['merged']}"
+            assert result["deleted"] >= 1, \
+                f"应删除至少 1 条副本，实际 {result['deleted']}"
+
+            # 验证 store 中剩余 2 条记忆
+            remaining = store.load_all()
+            assert len(remaining) == 2, \
+                f"合并后应剩余 2 条记忆，实际 {len(remaining)}"
+
+            # 找到合并后的 BM25 相关记忆
+            remaining_ids = {m.id for m in remaining}
+            # 无关记忆 C 应保留
+            assert mem_c.id in remaining_ids, \
+                f"无关记忆 {mem_c.id} 应被保留，实际剩余 {remaining_ids}"
+
+            # 找到合并后的记忆（primary 为 A，因 importance=8 > 7）
+            merged_mem = next((m for m in remaining if m.id == mem_a.id), None)
+            assert merged_mem is not None, \
+                f"合并后 primary({mem_a.id}) 应保留在 store 中，实际 {remaining_ids}"
+
+            # 验证合并后记忆包含 A 和 B 的 keywords 并集
+            a_keywords = set(mem_a.keywords)
+            b_keywords = set(mem_b.keywords)
+            expected_union = a_keywords | b_keywords
+            actual_keywords = set(merged_mem.keywords)
+            for kw in expected_union:
+                assert kw in actual_keywords, \
+                    f"合并后记忆 keywords 中缺少 '{kw}'（来自并集），实际 {actual_keywords}"
+
+            # 验证合并后 importance = max(8, 7) = 8
+            assert merged_mem.importance == 8, \
+                f"合并后 importance 应为 8（取较大值），实际 {merged_mem.importance}"
+
+            # 验证持久化：重新加载 store，结果一致
+            reloaded = MemoryStore(store_path)
+            reloaded_all = reloaded.load_all()
+            assert len(reloaded_all) == 2, \
+                f"持久化后应有 2 条记忆，实际 {len(reloaded_all)}"
+            reloaded_ids = {m.id for m in reloaded_all}
+            assert mem_a.id in reloaded_ids, "持久化后 primary 应存在"
+            assert mem_c.id in reloaded_ids, "持久化后无关记忆应存在"
+
+        finally:
+            _cleanup_dir(store_path)
+
+
+# ==================== 场景 7 ====================
+
+class TestMemoryDecayE2E:
+    """
+    场景 7: Phase 2.2 Memory Decay 端到端
+           添加 2 条记忆（最近访问 vs 60 天前访问，同初始 importance）
+           → 对两条分别调用 apply_decay
+           → 验证新记忆 importance < 旧记忆的 importance（或旧已触底）
+           → 调用 cleanup_decayed 清理触底记忆
+           → 验证触底记忆被移除
+    """
+
+    def test_memory_decay_e2e(self):
+        store_path, store = _new_tmp_store()
+
+        # 固定"当前时间"以确保测试稳定性
+        now = datetime(2026, 3, 14, 12, 0, 0)
+
+        try:
+            # 最近访问：1 天前（保留率接近 1）
+            mem_recent = Memory(
+                id="mem_20260314_010",
+                content="刚刚完成的重要任务：实现 Phase 2 记忆衰减引擎",
+                timestamp="2026-03-13T12:00:00",
+                keywords=["decay", "Phase2", "记忆衰减", "重要"],
+                tags=["implementation", "phase2"],
+                context="Phase 2.2 记忆衰减引擎实现完成",
+                importance=10,
+                last_accessed="2026-03-13T12:00:00",  # 1 天前
+            )
+            # 60 天前访问：衰减严重
+            mem_old = Memory(
+                id="mem_20260314_011",
+                content="60 天前完成的低优先级笔记整理任务",
+                timestamp="2026-01-14T12:00:00",
+                keywords=["笔记整理", "低优先级", "旧记忆"],
+                tags=["note", "low-priority"],
+                context="旧的笔记整理任务，长期未访问",
+                importance=10,
+                last_accessed="2026-01-14T12:00:00",  # ~60 天前
+            )
+
+            store.add(mem_recent)
+            store.add(mem_old)
+
+            # 对两条记忆分别施加衰减
+            decayed_recent = apply_decay(mem_recent, now=now)
+            decayed_old = apply_decay(mem_old, now=now)
+
+            # 验证衰减后，新记忆 importance > 旧记忆 importance（旧衰减更多）
+            assert decayed_recent.importance > decayed_old.importance, (
+                f"新记忆衰减后 importance ({decayed_recent.importance}) 应 > "
+                f"旧记忆衰减后 importance ({decayed_old.importance})"
+            )
+
+            # 验证旧记忆衰减幅度明显（60 天 / (10*3) = 2 个 stability 周期）
+            # retention = e^(-60/30) = e^(-2) ≈ 0.135，base=10 → decayed = max(2, 1.35) = 2
+            floor_old = max(1, int(mem_old.importance * 0.2))  # = 2
+            assert decayed_old.importance <= floor_old + 1, (
+                f"旧记忆应接近或达到 floor({floor_old})，实际 {decayed_old.importance}"
+            )
+
+            # 直接调用 cleanup_decayed，基于 store 中的原始记忆（importance=10）判断触底
+            # 不手动写回衰减结果，避免二次衰减导致 floor 判断基准错误
+            deleted_count = cleanup_decayed(store, now=now)
+
+            # 验证触底的旧记忆被清理
+            assert deleted_count >= 1, \
+                f"应至少删除 1 条触底记忆，实际删除 {deleted_count}"
+
+            remaining = store.load_all()
+            remaining_ids = {m.id for m in remaining}
+
+            # 旧记忆应被删除（已触底）
+            assert mem_old.id not in remaining_ids, \
+                f"旧记忆 {mem_old.id} 已触底，应被 cleanup_decayed 删除"
+
+            # 新记忆应保留（未触底）
+            assert mem_recent.id in remaining_ids, \
+                f"新记忆 {mem_recent.id} 未触底，应被保留"
+
+            # 验证持久化：重新加载确认
+            reloaded = MemoryStore(store_path)
+            reloaded_all = reloaded.load_all()
+            reloaded_ids = {m.id for m in reloaded_all}
+            assert mem_old.id not in reloaded_ids, \
+                "持久化层：旧记忆应已被删除"
+            assert mem_recent.id in reloaded_ids, \
+                "持久化层：新记忆应仍存在"
+
+        finally:
+            _cleanup_dir(store_path)
+
+
 # ==================== 测试运行器 ====================
 
 def run_tests():
@@ -590,6 +790,8 @@ def run_tests():
         TestPassiveEvolutionAndAccessTracking,
         TestCliFullCommandSet,
         TestChineseContentFullChain,
+        TestMemoryConsolidationE2E,
+        TestMemoryDecayE2E,
     ]
 
     passed = 0

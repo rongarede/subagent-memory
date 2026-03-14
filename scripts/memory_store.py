@@ -240,6 +240,14 @@ class MemoryStore:
         """Return the number of memories."""
         return len(list(self.store_path.glob("*.md")))
 
+    def delete(self, memory_id: str) -> bool:
+        """Delete a memory by ID. Returns True if deleted, False if not found."""
+        path = self._memory_file(memory_id)
+        if path.exists():
+            path.unlink()
+            return True
+        return False
+
     # ==================== Phase 6b: 多角色合并检索 ====================
 
     def retrieve_merged(self, query: str, top_k: int = 3, spread: bool = True,

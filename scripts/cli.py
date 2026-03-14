@@ -361,6 +361,35 @@ def cmd_export(args):
             print(f"  Note: {p}")
 
 
+def cmd_consolidate(args):
+    """扫描记忆库，合并相似记忆对。"""
+    from consolidator import consolidate
+
+    store = get_store(args)
+    mode = "（dry-run 预览模式）" if args.dry_run else ""
+    print(f"=== 记忆合并{mode} ===")
+    print(f"阈值: {args.threshold} | 存储路径: {store.store_path}")
+    print()
+
+    result = consolidate(store, threshold=args.threshold, dry_run=args.dry_run)
+
+    pairs = result["pairs"]
+    if not pairs:
+        print("未发现相似记忆对，无需合并。")
+        return
+
+    print(f"发现 {len(pairs)} 对相似记忆：")
+    for id_a, id_b, score in pairs:
+        print(f"  [{score:.3f}] {id_a}  ↔  {id_b}")
+    print()
+
+    if args.dry_run:
+        print(f"预览完成（未修改）：发现 {len(pairs)} 对可合并记忆。")
+        print("移除 --dry-run 参数以执行实际合并。")
+    else:
+        print(f"合并完成：merged={result['merged']}，deleted={result['deleted']}")
+
+
 # ==================== 主入口 ====================
 
 def main():
@@ -444,6 +473,21 @@ def main():
     # ---- generate-index ----
     subparsers.add_parser("generate-index", help="按类型生成 MEMORY.md 索引")
 
+    # ---- consolidate ----
+    p_consolidate = subparsers.add_parser("consolidate", help="扫描记忆库，合并相似记忆对")
+    p_consolidate.add_argument(
+        "--threshold",
+        type=float,
+        default=0.85,
+        help="相似度阈值（默认: 0.85）",
+    )
+    p_consolidate.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="预览模式：只显示相似对，不执行合并",
+    )
+
     # ---- feedback ----
     p_feedback = subparsers.add_parser("feedback", help="为指定记忆记录使用反馈")
     p_feedback.add_argument("--memory-id", required=True, help="要反馈的记忆 ID")
@@ -468,6 +512,7 @@ def main():
         "list": cmd_list,
         "export": cmd_export,
         "feedback": cmd_feedback,
+        "consolidate": cmd_consolidate,
     }
     commands[args.command](args)
 
