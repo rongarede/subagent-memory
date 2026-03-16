@@ -1,0 +1,225 @@
+{
+  "main": {
+    "id": "77de3010476f729c",
+    "type": "split",
+    "children": [
+      {
+        "id": "753395da2bf75974",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5b0126d6acea4de8",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "agents/root/task_aris_项目探索决策.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "task_aris_项目探索决策"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "41d6af3b2c1504f5",
+    "type": "split",
+    "children": [
+      {
+        "id": "a6e6241bb71443f2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "29b438e31131e8c7",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "2d3f9b0f5954291c",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "c3b94ac21ee04d92",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 364.5
+  },
+  "right": {
+    "id": "43f3f504cbbaa42b",
+    "type": "split",
+    "children": [
+      {
+        "id": "3eadcf648fbf0292",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "615d0c5597d372f3",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "创建链接.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "创建链接 的反向链接列表"
+            }
+          },
+          {
+            "id": "1e518f9e41f43911",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "创建链接.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "创建链接 的出链列表"
+            }
+          },
+          {
+            "id": "8b1189211feb4aae",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "98613aadaf3251f3",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "a32820d18f20fe3c",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "创建链接.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "创建链接 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "5b0126d6acea4de8",
+  "lastOpenFiles": [
+    "templates/run-lightweight.yaml",
+    "templates",
+    "runs/2026-03-16-resume-edit.md",
+    "runs/2026-03-16-reflex-full-audit.md",
+    "runs/2026-03-15-round5-robustness.md",
+    "runs/2026-03-15-round4-smart-automation.md",
+    "runs/2026-03-15-round3-automation-integration.md",
+    "runs/2026-03-15-round2-deep-integration.md",
+    "runs/2026-03-15-reflex-audit-loop-run.md",
+    "runs/2026-03-15-reflex-audit-first-run.md",
+    "runs/2026-03-15-reflection-failure-handling.md",
+    "runs/2026-03-15-phase-d-e2e-testing.md",
+    "runs/2026-03-15-phase-c-trigger-tracker.md",
+    "runs/2026-03-15-phase-b-feedback-integration.md",
+    "runs/2026-03-15-phase-a-feedback-audit.md",
+    "runs/2026-03-15-para-audit.md",
+    "runs/2026-03-15-fuzz-round9.md",
+    "runs/2026-03-15-fuzz-round8.md",
+    "runs/2026-03-15-fuzz-round7.md",
+    "runs/2026-03-15-fuzz-round6.md",
+    "runs/2026-03-15-fuzz-round5.md",
+    "runs/2026-03-15-fuzz-round4.md",
+    "runs/2026-03-15-fuzz-round3.md",
+    "runs/2026-03-15-fuzz-round2.md",
+    "runs/2026-03-15-fuzz-round1.md",
+    "runs/2026-03-15-architecture-docs.md",
+    "runs/2026-03-14-phase2-consolidation-decay.md",
+    "runs",
+    "trigger-stats.json",
+    "skills/reflex-fuzz/scripts/explore.sh",
+    "skills/reflex-fuzz/scripts/report.py",
+    "skills/agent-memory/tests/test_trigger_tracker.py",
+    "skills/agent-memory/tests/test_yume_memory_save.py",
+    "skills/agent-memory/tests/test_scheduled_decay.py",
+    "skills/agent-memory/tests/test_retriever_health.py",
+    "skills/agent-memory/tests/test_retriever_extended.py"
+  ]
+}
