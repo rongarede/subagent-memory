@@ -1,0 +1,193 @@
+{
+  "metadata": {},
+  "rules": {
+    "research": {
+      "success": 5,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T00:19:54.797999",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "explore": {
+      "success": 19,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T08:58:49.756645",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "implement": {
+      "success": 26,
+      "failure": 2,
+      "skip": 0,
+      "last_triggered": "2026-03-16T09:53:32.735324",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [
+        {
+          "timestamp": "2026-03-15T23:01:04.477937",
+          "level": "L2",
+          "action": "pending",
+          "original_agent": "tetsu",
+          "replacement_agent": null,
+          "reason": "implement 失败，预期恢复级别 L2 （跳过L1，方案问题非执行问题）",
+          "outcome": "success"
+        },
+        {
+          "timestamp": "2026-03-16T08:15:11.640884",
+          "level": "L2",
+          "action": "re-spawn",
+          "original_agent": null,
+          "replacement_agent": "Aspen",
+          "reason": "E01 任务方案问题，换角色接手",
+          "outcome": "success"
+        }
+      ],
+      "last_recovery_level": "L2",
+      "l1_skip_count": 1
+    },
+    "document": {
+      "success": 16,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T09:38:41.341898",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "audit": {
+      "success": 13,
+      "failure": 1,
+      "skip": 0,
+      "last_triggered": "2026-03-16T09:29:30.608214",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [
+        {
+          "timestamp": "2026-03-16T08:15:12.692017",
+          "level": "L1",
+          "action": "resume",
+          "original_agent": null,
+          "replacement_agent": "shin",
+          "reason": "补录：commit-msg hook 缺失导致审计失败",
+          "outcome": "success"
+        }
+      ],
+      "last_recovery_level": "L1",
+      "l1_skip_count": 0
+    },
+    "verify": {
+      "success": 3,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T08:47:11.699863",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "commit": {
+      "success": 7,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T09:40:50.893315",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "journal": {
+      "success": 15,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T09:27:15.755329",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "memory": {
+      "success": 13,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T09:51:41.138021",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "devour": {
+      "success": 0,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": null,
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    },
+    "define": {
+      "success": 1,
+      "failure": 0,
+      "skip": 0,
+      "last_triggered": "2026-03-16T09:05:21.750541",
+      "weight": 1.0,
+      "cb_state": "CLOSED",
+      "cb_consecutive_failures": 0,
+      "cb_half_open_successes": 0,
+      "cb_opened_at": null,
+      "recovery_history": [],
+      "last_recovery_level": null,
+      "l1_skip_count": 0
+    }
+  },
+  "parallel_batches": {
+    "active": null,
+    "history": []
+  },
+  "updated_at": "2026-03-16T09:53:32.735335"
+}

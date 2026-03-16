@@ -1,0 +1,25 @@
+# 排除所有 agents 记忆内容
+agents/*/*/task_*.md
+agents/*/*/feedback_*.md
+agents/*/*/project_*.md
+agents/*/*/reference_*.md
+agents/*/*/user_*.md
+
+# 排除敏感文件
+.env
+*.env
+*.pem
+*.key
+credentials*
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store
+memory-extract.log
+
+# 但保留 configs 目录
+!configs/

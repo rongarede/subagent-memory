@@ -1,0 +1,23 @@
+{
+  "agent_reflection_map": {
+    "kaze": "explore",
+    "yomi": "research",
+    "tetsu": "implement",
+    "fumio": "document",
+    "shin": "audit",
+    "haku": "verify",
+    "raiga": "devour",
+    "norna": "define",
+    "yume": "memory"
+  },
+  "keyword_overrides": {
+    "commit": "commit",
+    "提交": "commit",
+    "git commit": "commit",
+    "日记": "journal",
+    "journal": "journal",
+    "daily": "journal",
+    "日报": "journal"
+  },
+  "terminal_reflections": ["journal", "memory"]
+}

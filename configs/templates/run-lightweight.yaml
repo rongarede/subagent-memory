@@ -1,0 +1,35 @@
+# 轻量级 Workflow Run 模板
+# 适用于：overnight batch、multi-round 执行、非标准决策反射
+# 使用场景：当任务不遵循标准 Phase 0-6 决策反射流程时使用此模板
+
+name: "{task-slug}"
+workflow: "batch-execution"  # or "overnight-round"
+date: "YYYY-MM-DD"
+status: "in_progress"  # → completed
+
+# 执行步骤（替代标准 Phase 表格）
+steps:
+  - id: "step-1"
+    name: "{步骤名}"
+    agent: "{角色名}"
+    status: "completed"  # completed / failed / skipped
+    skip_reason: ""      # 跳过时必填
+    retry_count: 0
+    output_summary: "{一句话结果}"
+
+  # 添加更多步骤时复制上方 block
+  # - id: "step-2"
+  #   name: "{步骤名}"
+  #   agent: "{角色名}"
+  #   status: "completed"
+  #   skip_reason: ""
+  #   retry_count: 0
+  #   output_summary: "{一句话结果}"
+
+# 最终决策
+decision: "{最终决策和理由}"
+skip_reason: "none"  # 无跳步写 none；有跳步写具体原因
+
+# 可选：关联资源
+# related_files: []
+# related_tasks: []
